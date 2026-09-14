@@ -1,40 +1,39 @@
 #include <iostream>
-using namespace std;
 
 void display_console()
 {
-    cout << "  ______      _______.  ______  .______   _______      _______.____    ____" << "\n";
-    cout << " /      |    /       | /  __  \\ |   _  \\ |   ____|    /       |\\   \\  /   /" << "\n";
-    cout << "|  ,----'   |   (----`|  |  |  ||  |_)  ||  |__      |   (----` \\   \\/   /" << "\n";
-    cout << "|  |         \\   \\    |  |  |  ||   ___/ |   __|      \\   \\      \\_    _/" << "\n";
-    cout << "|  `----..----)   |   |  `--'  ||  |     |  |____ .----)   |       |  |" << "\n";
-    cout << " \\______||_______/     \\______/ | _|     |_______||_______/        |__|" << "\n";
-    cout << "---------------------------------------------------------------------------\n";
-    cout << "Welcome to CSOPESY Emulator!\n";
-    cout << "---------------------------------------------------------------------------\n";
+    std::cout << "  ______      _______.  ______  .______   _______      _______.____    ____" << "\n";
+    std::cout << " /      |    /       | /  __  \\ |   _  \\ |   ____|    /       |\\   \\  /   /" << "\n";
+    std::cout << "|  ,----'   |   (----`|  |  |  ||  |_)  ||  |__      |   (----` \\   \\/   /" << "\n";
+    std::cout << "|  |         \\   \\    |  |  |  ||   ___/ |   __|      \\   \\      \\_    _/" << "\n";
+    std::cout << "|  `----..----)   |   |  `--'  ||  |     |  |____ .----)   |       |  |" << "\n";
+    std::cout << " \\______||_______/     \\______/ | _|     |_______||_______/        |__|" << "\n";
+    std::cout << "---------------------------------------------------------------------------\n";
+    std::cout << "Welcome to CSOPESY Emulator!\n";
+    std::cout << "---------------------------------------------------------------------------\n";
 }
 
 void display_help(bool isInitialized)
 {
-    cout << "exit - shut down the OS Emulator" << "\n";
-    cout << "help - display list of commands" << "\n";
-    cout << "initialize -  initialize the processor configuration of the application" << "\n";
+    std::cout << "exit - shut down the OS Emulator" << "\n";
+    std::cout << "help - display list of commands" << "\n";
+    std::cout << "initialize -  initialize the processor configuration of the application" << "\n";
 
     if (isInitialized)
     {
-        cout << "report-util - generate and save CPU util report" << "\n";
-        cout << "scheduler-start - continuously generates a batch of dummy processes for the CPU scheduler" << "\n";
-        cout << "scheduler-stop - stop generating dummy processes" << "\n";
-        cout << "screen -ls - lists all running processes " << "\n";
-        cout << "screen -r <process_name> - access an existing process " << "\n";
-        cout << "screen -s <process_name> - creates a new process " << "\n";
+        std::cout << "report-util - generate and save CPU util report" << "\n";
+        std::cout << "scheduler-start - continuously generates a batch of dummy processes for the CPU scheduler" << "\n";
+        std::cout << "scheduler-stop - stop generating dummy processes" << "\n";
+        std::cout << "screen -ls - lists all running processes " << "\n";
+        std::cout << "screen -r <process_name> - access an existing process " << "\n";
+        std::cout << "screen -s <process_name> - creates a new process " << "\n";
     }
 }
 
 void display_screen_help()
 {
-    cout << "Error. Invalid usage of screen command." << "\n";
-    cout << "screen -ls - lists all running processes " << "\n";
-    cout << "screen -r <process_name> - access an existing process " << "\n";
-    cout << "screen -s <process_name> - creates a new process " << "\n";
+    std::cout << "Error. Invalid usage of screen command." << "\n";
+    std::cout << "screen -ls - lists all running processes " << "\n";
+    std::cout << "screen -r <process_name> - access an existing process " << "\n";
+    std::cout << "screen -s <process_name> - creates a new process " << "\n";
 }

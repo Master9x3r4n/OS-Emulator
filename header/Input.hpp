@@ -3,15 +3,14 @@
 #include <vector>
 #include <sstream>
 
-using namespace std;
 
-vector<string> get_input() {
-    string line, word;
-    vector<string> buffer;
+std::vector<std::string> get_input() {
+    std::string line, word;
+    std::vector<std::string> buffer;
     
-    cout << "root:\\>";
-    if (getline(cin, line)) {
-        stringstream ss(line);
+    std::cout << "root:\\>";
+    if (std::getline(std::cin, line)) {
+        std::stringstream ss(line);
         while (ss >> word) {
             buffer.push_back(word);
         }

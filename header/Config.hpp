@@ -6,11 +6,9 @@
 #include <string_view>
 #include <vector>
 
-using namespace std;
-
 struct Config {
     uint8_t numCpu; // range from 1 to 128
-    string scheduler; // only either "fcfs" or "rr"
+    std::string scheduler; // only either "fcfs" or "rr"
     uint32_t quantumCycles; // range from 1 to 2^32
     uint32_t batchProcessFreq;
     uint32_t minIns;
@@ -18,24 +16,24 @@ struct Config {
     uint32_t delayPerExec;
 };
 
-static string trim(const string& s)
+static std::string trim(const std::string& s)
 {
     auto start = s.find_first_not_of(" \t\r\n");
-    if (start == string::npos) return "";
+    if (start == std::string::npos) return "";
     auto end = s.find_last_not_of(" \t\r\n");
     return s.substr(start, end - start + 1);
 }
 
-static bool split_kv(const string& line, string& key, string& value)
+static bool split_kv(const std::string& line, std::string& key, std::string& value)
 {
     auto pos = line.find_first_of(" \t");
-    if (pos == string::npos) return false;
+    if (pos == std::string::npos) return false;
     key = trim(line.substr(0, pos));
     value = trim(line.substr(pos + 1));
     return !key.empty() && !value.empty();
 }
 
-static string strip_quotes(const string& s)
+static std::string strip_quotes(const std::string& s)
 {
     if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
         return s.substr(1, s.size() - 2);
@@ -45,27 +43,27 @@ static string strip_quotes(const string& s)
 bool initialize_config(Config& config)
 {
     // Open and verify file path
-    ifstream file("config.txt");
+    std::ifstream file("config.txt");
     if (!file.is_open())
     {
-        cerr << "Error: config file not found / problem opening file" << endl;
+        std::cerr << "Error: config file not found / problem opening file" << std::endl;
         return false; // return 0 for error (initialized = false)
     }
 
     // read lines from config.txt and store values into Config
-    string line;
+    std::string line;
     int j = 1;
-    while (getline(file, line))
+    while (std::getline(file, line))
     {
-        string trimmed = trim(line);
+        std::string trimmed = trim(line);
         if (!trimmed.empty())
         {
             // split line to k-v pair
-            string key, value;
+            std::string key, value;
             if (!split_kv(trimmed, key, value))
             {
-                cerr << "Error: malformed line " << j 
-                    << ": " << trimmed << endl;
+                std::cerr << "Error: malformed line " << j 
+                    << ": " << trimmed << std::endl;
                 return false;
             }
 
@@ -77,19 +75,19 @@ bool initialize_config(Config& config)
                     unsigned long v = stoul(value);
                     if (v < 1 || v > 128)
                     {
-                        cerr << "Error: num-cpu must be 1..128 (line " << j 
-                            << ")" << endl;
+                        std::cerr << "Error: num-cpu must be 1..128 (line " << j 
+                            << ")" << std::endl;
                         return false;
                     }
                     config.numCpu = static_cast<uint8_t>(v);
                 }
                 else if (key == "scheduler")
                 {
-                    string s = strip_quotes(value);
+                    std::string s = strip_quotes(value);
                     if (s != "fcfs" && s != "rr")
                     {
-                        cerr << "Error: scheduler must be \"fcfs\" or \"rr\" (line "
-                            << j << ")" << endl;
+                        std::cerr << "Error: scheduler must be \"fcfs\" or \"rr\" (line "
+                            << j << ")" << std::endl;
                         return false;
                     }
                     config.scheduler = s;
@@ -99,7 +97,7 @@ bool initialize_config(Config& config)
                     unsigned long v = stoul(value);
                     if (v < 1)
                     {
-                        cerr << "Error: quantum-cycles must be >= 1 (line " << j << ")" << endl;
+                        std::cerr << "Error: quantum-cycles must be >= 1 (line " << j << ")" << std::endl;
                         return false;
                     }
                     config.quantumCycles = static_cast<uint32_t>(v);
@@ -122,14 +120,14 @@ bool initialize_config(Config& config)
                 }
                 else
                 {
-                    cerr << "Warning: unknown key '" << key << "' on line "
-                        << j << " (ignored)" << endl;
+                    std::cerr << "Warning: unknown key '" << key << "' on line "
+                        << j << " (ignored)" << std::endl;
                 }
             } 
-            catch (const exception& e) 
+            catch (const std::exception& e) 
             {
-                cerr << "Error: invalid value on line " << j
-                    << " (" << key << " = " << value << "): " << e.what() << endl;
+                std::cerr << "Error: invalid value on line " << j
+                    << " (" << key << " = " << value << "): " << e.what() << std::endl;
                 return false;
             }
         }
@@ -138,11 +136,11 @@ bool initialize_config(Config& config)
     // Cross-field validation
     if (config.minIns > config.maxIns)
     {
-        cerr << "Error: min-ins (" << config.minIns
-             << ") cannot be greater than max-ins (" << config.maxIns << ")" << endl;
+        std::cerr << "Error: min-ins (" << config.minIns
+             << ") cannot be greater than max-ins (" << config.maxIns << ")" << std::endl;
         return false;
     }
 
-    cout << "Program successfully initialized\n";
+    std::cout << "Program successfully initialized\n";
     return true; // return 1 for success (initialized = true)
 }

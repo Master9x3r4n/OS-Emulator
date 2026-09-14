@@ -3,8 +3,6 @@
 #include <vector>
 #include <cstdint>
 
-using namespace std;
-
 #include "header/Input.hpp"
 #include "header/Display.hpp"
 #include "header/Config.hpp"
@@ -21,7 +19,7 @@ Config config = {
 
 int main() {
     bool isProgramRunning = true, isProgramInitialized = false;
-    vector<string> commandInput;
+    std::vector<std::string> commandInput;
 
     while (isProgramRunning)
     {
@@ -46,7 +44,7 @@ int main() {
         }
         else if (!isProgramInitialized)
         {
-            cout << "Error occured. Initialize program first. Type 'help' for list of valid commands." << "\n";
+            std::cout << "Error occured. Initialize program first. Type 'help' for list of valid commands." << "\n";
         } 
         else 
         {
@@ -71,22 +69,22 @@ int main() {
                 else if (commandInput[1] == "-ls")
                 {
                     // TODO 1: call function to generate current cpu util report
-                    cout <<"wow you print info\n";
+                    std::cout <<"wow you print info\n";
                 }
                 else if (commandInput[1] == "-s")
                 {
                     //TODO 3: call module to create new process then move to process
-                    cout <<"wow you generate process\n";
+                    std::cout <<"wow you generate process\n";
                 }
                 else if (commandInput[1] == "-r")
                 {
                     //TODO 3: call module to move to corresponding process
-                    cout <<"wow you access process\n";
+                    std::cout <<"wow you access process\n";
                 }
             }
             else
             {
-                cout <<"Unkown command. Type 'help' for list of valid commands." << "\n";
+                std::cout <<"Unkown command. Type 'help' for list of valid commands." << "\n";
             }
         }
     }
