@@ -28,7 +28,11 @@ int main() {
         display_console();
         commandInput = get_input();
 
-        if (commandInput[0] == "initialize")
+        if (commandInput[0] == "clear")
+        {
+            // TODO: clear console
+        } 
+        else if (commandInput[0] == "initialize")
         {
             isProgramInitialized = initialize_config(config);
         } 
@@ -48,15 +52,15 @@ int main() {
         {
             if (commandInput[0] == "report-util")
             {
-                // TODO: call same function as `screen -ls` but save output into text file
+                // TODO 1: call same function as `screen -ls` but save output into text file
             }
             else if (commandInput[0] == "scheduler-start")
             {
-                // TODO: call coresponding thread module to generate dummy processes
+                // TODO 2: call coresponding thread module to generate dummy processes
             }
             else if (commandInput[0] == "scheduler-stop")
             {
-                // TODO: call coresponding thread module to stop generating dummy processes
+                // TODO 2: call coresponding thread module to stop generating dummy processes
             }
             else if (commandInput[0] == "screen")
             {
@@ -66,17 +70,17 @@ int main() {
                 }
                 else if (commandInput[1] == "-ls")
                 {
-                    // TODO: call function to generate current cpu util report
+                    // TODO 1: call function to generate current cpu util report
                     cout <<"wow you print info\n";
                 }
                 else if (commandInput[1] == "-s")
                 {
-                    //TODO: call module to create new process then move to process
+                    //TODO 3: call module to create new process then move to process
                     cout <<"wow you generate process\n";
                 }
                 else if (commandInput[1] == "-r")
                 {
-                    //TODO: call module to move to corresponding process
+                    //TODO 3: call module to move to corresponding process
                     cout <<"wow you access process\n";
                 }
             }
