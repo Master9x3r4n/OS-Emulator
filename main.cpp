@@ -7,15 +7,7 @@
 #include "header/Display.hpp"
 #include "header/Config.hpp"
 
-Config config = {
-    numCpu: 24,
-    scheduler: "rr", 
-    quantumCycles: 5,
-    batchProcessFreq: 1,
-    minIns: 1000,
-    maxIns: 2000,
-    delayPerExec: 0
-};
+Config config;
 
 int main() {
     bool isProgramRunning = true, isProgramInitialized = false;
@@ -31,7 +23,7 @@ int main() {
 
         if (commandInput[0] == "initialize")
         {
-            isProgramInitialized = initializeConfig(config);
+            isProgramInitialized = config.initialize("config.txt");
         } 
         else if (commandInput[0] == "exit")
         {
