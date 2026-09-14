@@ -21,18 +21,17 @@ int main() {
     bool isProgramRunning = true, isProgramInitialized = false;
     std::vector<std::string> commandInput;
 
+    clearScreen();
+    displayConsole();
     while (isProgramRunning)
     {
-        display_console();
-        commandInput = get_input();
+        commandInput = getInput();
+        clearScreen();
+        displayConsole();
 
-        if (commandInput[0] == "clear")
+        if (commandInput[0] == "initialize")
         {
-            // TODO: clear console
-        } 
-        else if (commandInput[0] == "initialize")
-        {
-            isProgramInitialized = initialize_config(config);
+            isProgramInitialized = initializeConfig(config);
         } 
         else if (commandInput[0] == "exit")
         {
@@ -40,9 +39,9 @@ int main() {
         }
         else if (commandInput[0] == "help")
         {
-            display_help(isProgramInitialized);
+            displayHelp(isProgramInitialized);
         }
-        else if (!isProgramInitialized)
+        else if (!isProgramInitialized && (commandInput[0] != "clear"))
         {
             std::cout << "Error occured. Initialize program first. Type 'help' for list of valid commands." << "\n";
         } 
@@ -64,7 +63,7 @@ int main() {
             {
                 if ((commandInput.size() < 2) || ((commandInput.size() == 2) && (commandInput[1] != "-ls")))
                 {
-                    display_screen_help();
+                    displayScreenHelp();
                 }
                 else if (commandInput[1] == "-ls")
                 {
@@ -82,12 +81,14 @@ int main() {
                     std::cout <<"wow you access process\n";
                 }
             }
-            else
+            else if (commandInput[0] != "clear")
             {
                 std::cout <<"Unkown command. Type 'help' for list of valid commands." << "\n";
             }
         }
     }
+    clearScreen();
+    std::cout << "Terminating program...";
 
 
     return 0;

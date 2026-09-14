@@ -40,7 +40,7 @@ static std::string strip_quotes(const std::string& s)
     return s;
 }
 
-bool initialize_config(Config& config)
+bool initializeConfig(Config& config)
 {
     // Open and verify file path
     std::ifstream file("config.txt");

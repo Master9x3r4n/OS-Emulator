@@ -1,6 +1,6 @@
 #include <iostream>
 
-void display_console()
+void displayConsole()
 {
     std::cout << "  ______      _______.  ______  .______   _______      _______.____    ____" << "\n";
     std::cout << " /      |    /       | /  __  \\ |   _  \\ |   ____|    /       |\\   \\  /   /" << "\n";
@@ -13,8 +13,9 @@ void display_console()
     std::cout << "---------------------------------------------------------------------------\n";
 }
 
-void display_help(bool isInitialized)
+void displayHelp(bool isInitialized)
 {
+    std::cout << "clear - clear the console menu content" << "\n";
     std::cout << "exit - shut down the OS Emulator" << "\n";
     std::cout << "help - display list of commands" << "\n";
     std::cout << "initialize -  initialize the processor configuration of the application" << "\n";
@@ -30,10 +31,15 @@ void display_help(bool isInitialized)
     }
 }
 
-void display_screen_help()
+void displayScreenHelp()
 {
     std::cout << "Error. Invalid usage of screen command." << "\n";
     std::cout << "screen -ls - lists all running processes " << "\n";
     std::cout << "screen -r <process_name> - access an existing process " << "\n";
     std::cout << "screen -s <process_name> - creates a new process " << "\n";
+}
+
+void clearScreen()
+{
+    std::cout << "\033[H\033[J";
 }

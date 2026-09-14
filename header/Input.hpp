@@ -4,7 +4,7 @@
 #include <sstream>
 
 
-std::vector<std::string> get_input() {
+std::vector<std::string> getInput() {
     std::string line, word;
     std::vector<std::string> buffer;
     
