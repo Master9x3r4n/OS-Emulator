@@ -16,5 +16,9 @@ vector<string> get_input() {
             buffer.push_back(word);
         }
     }
+
+    if (buffer.size() == 0)
+        buffer.push_back("");
+
     return buffer;
 }

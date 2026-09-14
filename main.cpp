@@ -5,9 +5,9 @@
 
 using namespace std;
 
-#include "header/Input.h"
-#include "header/Display.h"
-#include "header/Config.h"
+#include "header/Input.hpp"
+#include "header/Display.hpp"
+#include "header/Config.hpp"
 
 Config config = {
     numCpu: 24,
@@ -42,7 +42,7 @@ int main() {
         }
         else if (!isProgramInitialized)
         {
-            cout << "Error occured. Initialize program first" << "\n";
+            cout << "Error occured. Initialize program first. Type 'help' for list of valid commands." << "\n";
         } 
         else 
         {
@@ -79,6 +79,10 @@ int main() {
                     //TODO: call module to move to corresponding process
                     cout <<"wow you access process\n";
                 }
+            }
+            else
+            {
+                cout <<"Unkown command. Type 'help' for list of valid commands." << "\n";
             }
         }
     }

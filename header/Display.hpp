@@ -33,7 +33,7 @@ void display_help(bool isInitialized)
 
 void display_screen_help()
 {
-    cout << "Invalid usage of sreen command: " << "\n";
+    cout << "Error. Invalid usage of screen command." << "\n";
     cout << "screen -ls - lists all running processes " << "\n";
     cout << "screen -r <process_name> - access an existing process " << "\n";
     cout << "screen -s <process_name> - creates a new process " << "\n";
