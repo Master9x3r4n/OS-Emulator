@@ -1,0 +1,49 @@
+name: Specifications
+description: Items that appear directly on the specs
+title: ''
+labels:
+  - to-do
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please fill out the details below to help us process this specification.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the specification.
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: List down all needed features to accomplish this ticket.
+      placeholder: |
+        - [ ] Feature 1
+        - [ ] Feature 2
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria (AC)
+      description: List down all needed criteria to pass the bare minimum check for PRs.
+      placeholder: |
+        - [ ] Criteria 1
+        - [ ] Criteria 2
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add any other context or screenshots.
+    validations:
+      required: false
