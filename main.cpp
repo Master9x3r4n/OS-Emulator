@@ -7,7 +7,7 @@
 #include "utils/Input.hpp"
 #include "utils/Display.hpp"
 #include "utils/Reports.hpp"
-#include "configs/Config.hpp"
+#include "config/Config.hpp"
 
 Config config;
 
@@ -45,16 +45,20 @@ int main() {
     bool isProgramInitialized = false;
     std::vector<std::string> commandInput;
 
-    // Command Dispatch Registry
+    // Command Dispatch Registry using Unordered Map (tldr: this is where commands input -> function)
     std::unordered_map<std::string, Command> commandRegistry = {
+        // Core Commands
         {"initialize",      {false, [&](const auto&) { isProgramInitialized = config.initialize("configs/config.txt"); }}},
-        {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
-        {"clear",           {false, [](const auto&)  { /* Redraw handled by main loop */ }}},
-        {"report-util",     {true,  [](const auto&)  { GenerateReport(true); /* TODO 1: Pass data on generated util report */ }}},
+        {"clear",           {false, [](const auto&)  { }}}, /* Redraw handled by main loop */
+        {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
+
+        // Process Management Commands
+        {"report-util",     {true,  [](const auto&)  { GenerateReport(true /* TODO 1: Pass data on generated util report */); }}},
         {"scheduler-start", {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to generate dummy processes */ }}},
         {"scheduler-stop",  {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to stop generating dummy processes */ }}},
         {"screen",          {true,  handleScreenCommand}}
+
     };
 
     clearScreen();
