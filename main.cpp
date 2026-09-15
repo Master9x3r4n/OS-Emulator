@@ -24,7 +24,7 @@ void handleScreenCommand(const std::vector<std::string>& args) {
 
     const std::string& flag = args[1];
     if (flag == "-ls") {
-        // TODO 1: call function to generate current cpu util report
+        // TODO 1: Pass data on generated util report
         GenerateReport();
     } 
     else if (flag == "-s" && args.size() >= 3) {
@@ -51,7 +51,7 @@ int main() {
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
         {"clear",           {false, [](const auto&)  { /* Redraw handled by main loop */ }}},
-        {"report-util",     {true,  [](const auto&)  { GenerateReport(true); }}},
+        {"report-util",     {true,  [](const auto&)  { GenerateReport(true); /* TODO 1: Pass data on generated util report */ }}},
         {"scheduler-start", {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to generate dummy processes */ }}},
         {"scheduler-stop",  {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to stop generating dummy processes */ }}},
         {"screen",          {true,  handleScreenCommand}}
