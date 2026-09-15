@@ -8,14 +8,18 @@ type: Feature
 
 ---
 
-**Description**
+## Description
 A clear description of the specification
 
-**Requirements**
+## Requirements
 List down all needed features to accomplish this ticket
+- [ ] 
+- [ ]
 
-**Acceptance Criteria (AC)**
+## Acceptance Criteria (AC)
 List down all needed criteria to pass the bare minimum check for PRs
+- [ ] 
+- [ ]
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+## Additional context
+Add any other context or screenshots
