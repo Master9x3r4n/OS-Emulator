@@ -6,6 +6,7 @@
 
 #include "utils/Input.hpp"
 #include "utils/Display.hpp"
+#include "utils/Reports.hpp"
 #include "configs/Config.hpp"
 
 Config config;
@@ -24,7 +25,7 @@ void handleScreenCommand(const std::vector<std::string>& args) {
     const std::string& flag = args[1];
     if (flag == "-ls") {
         // TODO 1: call function to generate current cpu util report
-        std::cout << "wow you print info\n";
+        GenerateReport();
     } 
     else if (flag == "-s" && args.size() >= 3) {
         // TODO 3: call module to create new process then move to process
@@ -50,7 +51,7 @@ int main() {
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
         {"clear",           {false, [](const auto&)  { /* Redraw handled by main loop */ }}},
-        {"report-util",     {true,  [](const auto&)  { /* TODO 1: call function to generate current cpu util report and store to .txt output*/ }}},
+        {"report-util",     {true,  [](const auto&)  { GenerateReport(true); }}},
         {"scheduler-start", {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to generate dummy processes */ }}},
         {"scheduler-stop",  {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to stop generating dummy processes */ }}},
         {"screen",          {true,  handleScreenCommand}}
