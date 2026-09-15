@@ -3,9 +3,9 @@
 #include <vector>
 #include <cstdint>
 
-#include "header/Input.hpp"
-#include "header/Display.hpp"
-#include "header/Config.hpp"
+#include "utils/Input.hpp"
+#include "utils/Display.hpp"
+#include "configs/Config.hpp"
 
 Config config;
 
