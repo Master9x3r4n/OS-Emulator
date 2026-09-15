@@ -15,6 +15,7 @@ int main() {
 
     clearScreen();
     displayConsole();
+    std::cout << "Type 'help' for a list of commands\n";
     while (isProgramRunning)
     {
         commandInput = getInput();
@@ -23,7 +24,7 @@ int main() {
 
         if (commandInput[0] == "initialize")
         {
-            isProgramInitialized = config.initialize("config.txt");
+            isProgramInitialized = config.initialize("configs/config.txt");
         } 
         else if (commandInput[0] == "exit")
         {
@@ -81,7 +82,6 @@ int main() {
     }
     clearScreen();
     std::cout << "Terminating program...";
-
 
     return 0;
 }
