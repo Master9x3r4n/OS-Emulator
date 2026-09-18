@@ -18,7 +18,7 @@ class Config {
         Config() = default;
 
         // Loads values from a config file. Return true on success.
-        bool initialize(const std::string& filePath = "config.txt")
+        bool initialize(const std::string& filePath = "config/config.txt")
         {
             std::ifstream file(filePath);
             if (!file.is_open())

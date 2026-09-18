@@ -29,11 +29,11 @@ void handleScreenCommand(const std::vector<std::string>& args) {
     } 
     else if (flag == "-s" && args.size() >= 3) {
         // TODO 3: call module to create new process then move to process
-        std::cout << "wow you generate process: " << args[2] << "\n";
+        std::cout << "X command recognized. Doing something." << args[2] << "\n";
     } 
     else if (flag == "-r" && args.size() >= 3) {
         // TODO 3: call module to move to process
-        std::cout << "wow you access process: " << args[2] << "\n";
+        std::cout << "X command recognized. Doing something." << args[2] << "\n";
     } 
     else {
         displayScreenHelp();
@@ -48,15 +48,15 @@ int main() {
     // Command Dispatch Registry using Unordered Map (tldr: this is where commands input -> function)
     std::unordered_map<std::string, Command> commandRegistry = {
         // Core Commands
-        {"initialize",      {false, [&](const auto&) { isProgramInitialized = config.initialize("configs/config.txt"); }}},
+        {"initialize",      {false, [&](const auto&) { isProgramInitialized = config.initialize("config/config.txt"); }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
         {"clear",           {false, [](const auto&)  { }}}, /* Redraw handled by main loop */
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
 
         // Process Management Commands
         {"report-util",     {true,  [](const auto&)  { GenerateReport(true /* TODO 1: Pass data on generated util report */); }}},
-        {"scheduler-start", {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to generate dummy processes */ }}},
-        {"scheduler-stop",  {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to stop generating dummy processes */ }}},
+        {"scheduler-start", {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to generate dummy processes */  std::cout << "X command recognized. Doing something.\n";}}},
+        {"scheduler-stop",  {true,  [](const auto&)  { /* TODO 2: call coresponding thread module to stop generating dummy processes */ std::cout << "X command recognized. Doing something.\n"; }}},
         {"screen",          {true,  handleScreenCommand}}
 
     };
