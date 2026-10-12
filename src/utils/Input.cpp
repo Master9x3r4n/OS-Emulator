@@ -1,13 +1,9 @@
-#include <iostream>
-#include <string>
-#include <vector>
-#include <sstream>
-
+#include <utils/Input.hpp>
 
 std::vector<std::string> getInput() {
     std::string line, word;
     std::vector<std::string> buffer;
-    
+
     std::cout << "root:\\>";
     if (std::getline(std::cin, line)) {
         std::stringstream ss(line);

@@ -1,5 +1,4 @@
-#include <iostream>
-#include <iomanip>
+#include <utils/Display.hpp>
 
 void displayConsole()
 {

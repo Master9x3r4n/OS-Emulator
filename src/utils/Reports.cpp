@@ -1,12 +1,9 @@
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <string>
+#include <utils/Reports.hpp>
 
 // todo: generate report as passed parameter
-void GenerateReport(bool printOutput = false)
+void GenerateReport(bool printOutput)
 {
-    // Lambda helper to stream report content to any output stream (std::cout or std::ofstream) yes, i asked chikagpt for help
+    // Lambda helper to stream report content to any output stream (std::cout or std::ofstream)
     auto renderReport = [](std::ostream& outStream) {
         const int nameWidth      = 14;
         const int timestampWidth = 24;
@@ -52,15 +49,15 @@ void GenerateReport(bool printOutput = false)
 
     if (printOutput)
     {
-        std::ofstream outFile("csopesy-log.txt"); //declare filestream as csopesy-log.txt
+        std::ofstream outFile("csopesy-log.txt");
         if (outFile.is_open())
         {
-            renderReport(outFile); // render same report to file output
+            renderReport(outFile);
             std::cout << "Report successfully generated and saved to csopesy-log.txt\n";
         }
         else
         {
-            std::cerr << "Error: Unable to open csopesylog.txt for writing.\n";
+            std::cerr << "Error: Unable to open csopesy-log.txt for writing.\n";
         }
     }
 }
