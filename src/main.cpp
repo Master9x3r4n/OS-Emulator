@@ -57,9 +57,18 @@ int main() {
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
 
         // Process Management Commands
-        {"report-util",     {true,  [](const auto&)  { GenerateReport(true); }}},
-        {"scheduler-start", {true,  [](const auto&)  { std::cout << "X command recognized. Doing something.\n"; }}},
-        {"scheduler-stop",  {true,  [](const auto&)  { std::cout << "X command recognized. Doing something.\n"; }}},
+        {"report-util",     {true,  [](const auto&)  { 
+            GenerateReport(true /* TODO 1: Pass data on generated util report */); 
+            std::cout << "report-util command recognized. Doing something.\n";
+        }}},
+        {"scheduler-start", {true,  [](const auto&)  { 
+            /* TODO 2: call coresponding thread module to generate dummy processes */  
+            std::cout << "scheduler-start command recognized. Doing something.\n";
+        }}},
+        {"scheduler-stop",  {true,  [](const auto&)  { 
+            /* TODO 2: call coresponding thread module to stop generating dummy processes */ 
+            std::cout << "scheduler-stop command recognized. Doing something.\n"; 
+        }}},
         {"screen",          {true,  handleScreenCommand}}
     };
 
