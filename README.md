@@ -83,10 +83,11 @@ delay-per-exec 0
 |---|---|
 | `num-cpu` | Number of CPU cores, 1 to 128 |
 | `scheduler` | `"fcfs"` (first-come-first-serve) or `"rr"` (round robin) |
-| `quantum-cycles` | Time slice per core for round robin, at least 1. Ignored by FCFS |
-| `batch-process-freq` | CPU cycles between generated processes (used by `scheduler-start`, not yet wired) |
-| `min-ins`, `max-ins` | Instruction count range per generated process (not yet wired) |
-| `delay-per-exec` | Extra CPU cycles of busy-waiting between instructions. 0 means one instruction per cycle |
+| `quantum-cycles` | Time slice per core for round robin, 1 to 2^32. Ignored by FCFS |
+| `batch-process-freq` | CPU cycles between generated processes, 1 to 2^32 (used by `scheduler-start`, not yet wired) |
+| `min-ins`, `max-ins` | Instruction count range per generated process, 1 to 2^32, with `min-ins <= max-ins` (not yet wired) |
+| `delay-per-exec` | Extra CPU cycles of busy-waiting between instructions, 0 to 2^32. 0 means one instruction per cycle |
+
  
 The config is read at when running `initialize`. You may edit the config file after compilation when you rerun this command.
 

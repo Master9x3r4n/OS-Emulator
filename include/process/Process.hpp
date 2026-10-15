@@ -46,7 +46,7 @@ public:
     // busy-wait delay or executes the next instruction. An instruction
     // therefore takes (delayPerExec + 1) ticks, and the process keeps its
     // core while waiting.
-    void executeNext(uint32_t core, uint32_t delayPerExec);
+    void executeNext(uint32_t core, uint64_t delayPerExec);
 
 private:
     void executePrint(uint32_t core);
@@ -60,7 +60,7 @@ private:
     std::atomic<uint32_t> executed_{0};
     std::atomic<ProcessState> state_{ProcessState::Ready};
     std::atomic<int> core_{-1};
-    uint32_t delayRemaining_ = 0;
+    uint64_t delayRemaining_ = 0;
 
     bool fileLoggingEnabled_ = false;
     std::string logPath_;

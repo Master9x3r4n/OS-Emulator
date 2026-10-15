@@ -12,14 +12,12 @@ namespace SchedulerSettings {
 // show a process mid-run.
 inline constexpr std::chrono::milliseconds kTickDuration{100};
 
-// TEMPORARY (homework only): every process writes its PRINT output to
-// logs/<process_name>.txt. Set to false for the machine project, since the
-// file I/O hurts scheduler performance.
-inline constexpr bool kEnablePrintFileLogging = true;
-
-// TEMPORARY (homework only): create the test processes right after
-// "initialize". Set to false once processes come from scheduler-start.
-inline constexpr bool kSeedTestProcesses = true;
+// Temporary homework-only behavior, switched off for the main project.
+// kEnablePrintFileLogging: every process writes its PRINT output to
+//   logs/<process_name>.txt (file I/O hurts scheduler performance).
+// kSeedTestProcesses: create test processes right after "initialize".
+inline constexpr bool kEnablePrintFileLogging = false;
+inline constexpr bool kSeedTestProcesses = false;
 inline constexpr uint32_t kTestProcessCount = 10;
 inline constexpr uint32_t kTestProcessInstructions = 100;
 

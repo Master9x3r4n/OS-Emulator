@@ -76,8 +76,8 @@ private:
     // is only changed in start() before any thread runs).
     Policy policy_;
     uint32_t numCores_;
-    uint32_t quantumCycles_;
-    uint32_t delayPerExec_;
+    uint64_t quantumCycles_;
+    uint64_t delayPerExec_;
     std::chrono::milliseconds tickDuration_;
     std::string logDir_;
     bool loggingEnabled_;
@@ -97,7 +97,7 @@ private:
 
     std::deque<std::shared_ptr<Process>> ready_;
     std::vector<std::shared_ptr<Process>> slots_; // one per core
-    std::vector<uint32_t> quantumUsed_;
+    std::vector<uint64_t> quantumUsed_;
     std::vector<std::shared_ptr<Process>> finished_;
 
     std::thread schedulerThread_;

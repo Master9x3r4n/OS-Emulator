@@ -27,7 +27,7 @@ void Process::enableFileLogging(const std::string& dir)
     fileLoggingEnabled_ = true;
 }
 
-void Process::executeNext(uint32_t core, uint32_t delayPerExec)
+void Process::executeNext(uint32_t core, uint64_t delayPerExec)
 {
     if (isFinished())
         return;
