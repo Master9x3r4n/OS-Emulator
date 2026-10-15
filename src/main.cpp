@@ -3,13 +3,45 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <memory>
+#include <cstdio>
 
 #include <utils/Input.hpp>
 #include <utils/Display.hpp>
 #include <utils/Reports.hpp>
 #include <config/Config.hpp>
+#include <scheduler/Scheduler.hpp>
 
 Config config;
+std::unique_ptr<Scheduler> scheduler;
+
+// Loads config.txt, starts the scheduler (scheduler thread + one worker per
+// core) and, for the homework test case, seeds the test processes.
+// Returns true if the emulator is now initialized.
+bool initializeEmulator(const std::string& configPath) {
+    if (scheduler) {
+        std::cout << "Program is already initialized.\n";
+        return true;
+    }
+
+    if (!config.initialize(configPath))
+        return false;
+
+    scheduler = std::make_unique<Scheduler>(config, std::string(PROJECT_DIR) + "/logs");
+    if (!scheduler->start()) {
+        scheduler.reset();
+        return false;
+    }
+
+    if (SchedulerSettings::kSeedTestProcesses) {
+        for (uint32_t i = 1; i <= SchedulerSettings::kTestProcessCount; ++i) {
+            char name[32];
+            std::snprintf(name, sizeof(name), "process%02u", i);
+            scheduler->createProcess(name, SchedulerSettings::kTestProcessInstructions);
+        }
+    }
+    return true;
+}
 
 struct Command {
     bool requiresConfig;
@@ -24,8 +56,7 @@ void handleScreenCommand(const std::vector<std::string>& args) {
 
     const std::string& flag = args[1];
     if (flag == "-ls") {
-        // TODO 1: Pass data on generated util report
-        GenerateReport();
+        GenerateReport(scheduler->snapshot());
     }
     else if (flag == "-s" && args.size() >= 3) {
         // TODO 3: call module to create new process then move to process
@@ -51,15 +82,14 @@ int main() {
     // Command Dispatch Registry using Unordered Map
     std::unordered_map<std::string, Command> commandRegistry = {
         // Core Commands
-        {"initialize",      {false, [&](const auto&) { isProgramInitialized = config.initialize(configPath); }}},
+        {"initialize",      {false, [&](const auto&) { isProgramInitialized = initializeEmulator(configPath); }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
         {"clear",           {false, [](const auto&)  { }}}, /* Redraw handled by main loop */
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
 
         // Process Management Commands
-        {"report-util",     {true,  [](const auto&)  { 
-            GenerateReport(true /* TODO 1: Pass data on generated util report */); 
-            std::cout << "report-util command recognized. Doing something.\n";
+        {"report-util",     {true,  [](const auto&)  {
+            GenerateReport(scheduler->snapshot(), true);
         }}},
         {"scheduler-start", {true,  [](const auto&)  { 
             /* TODO 2: call coresponding thread module to generate dummy processes */  
@@ -101,6 +131,10 @@ int main() {
             }
         }
     }
+
+    // Signal shutdown and join the scheduler + worker threads.
+    if (scheduler)
+        scheduler->stop();
 
     clearScreen();
     std::cout << "Terminating program...";
