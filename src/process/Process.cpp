@@ -119,13 +119,13 @@ uint16_t Process::resolveOperand(const Operand& op)
 }
 
 // ---------------------------------------------------------------------------
-// Logging
+// In-Memory Log Buffer & Formatting
 // ---------------------------------------------------------------------------
 
-std::string Process::generateLogLine(int core) const
+std::string Process::generateLogLine(int core, std::chrono::system_clock::time_point tp) const
 {
     const std::string coreStr = (core >= 0) ? std::to_string(core) : "N/A";
-    return name_ + " | (" + formatTimestamp() + ") | Core: " + coreStr + " " +
+    return name_ + " | (" + formatTimestamp(tp) + ") | Core: " + coreStr + " " +
            std::to_string(executed_.load()) + "/" + std::to_string(totalInstructions());
 }
 
@@ -133,7 +133,14 @@ void Process::appendLog(const std::string& logLine)
 {
     {
         std::lock_guard<std::mutex> lk(logMtx_);
-        logs_.push_back(logLine);
+        if (maxLogs_ > 0)
+        {
+            while (logs_.size() >= maxLogs_)
+            {
+                logs_.pop_front();
+            }
+            logs_.push_back(logLine);
+        }
     }
 
     if (fileLoggingEnabled_)
@@ -155,7 +162,35 @@ void Process::appendLog(const std::string& logLine)
 std::vector<std::string> Process::getLogs() const
 {
     std::lock_guard<std::mutex> lk(logMtx_);
-    return logs_;
+    return std::vector<std::string>(logs_.begin(), logs_.end());
+}
+
+size_t Process::logCount() const
+{
+    std::lock_guard<std::mutex> lk(logMtx_);
+    return logs_.size();
+}
+
+void Process::clearLogs()
+{
+    std::lock_guard<std::mutex> lk(logMtx_);
+    logs_.clear();
+}
+
+size_t Process::maxLogCapacity() const
+{
+    std::lock_guard<std::mutex> lk(logMtx_);
+    return maxLogs_;
+}
+
+void Process::setMaxLogCapacity(size_t cap)
+{
+    std::lock_guard<std::mutex> lk(logMtx_);
+    maxLogs_ = cap;
+    while (logs_.size() > maxLogs_)
+    {
+        logs_.pop_front();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +233,7 @@ const Instruction* Process::fetch(uint32_t line) const
 {
     if (line < instructions_.size())
         return &instructions_[line];
-    return nullptr; // Returns nullptr past the end of the list
+    return nullptr;
 }
 
 const Instruction* Process::fetchInstruction() const
@@ -237,7 +272,7 @@ DecodedInstruction Process::decodeInstruction(const Instruction& inst)
     }
     case InstructionType::Declare: {
         dec.targetVar = inst.declareVar;
-        dec.computedValue = std::min<uint16_t>(inst.declareValue, 65535U);
+        dec.computedValue = SymbolTable::clamp(inst.declareValue);
         break;
     }
     case InstructionType::Add: {
@@ -290,10 +325,10 @@ void Process::executeInstruction(const DecodedInstruction& decoded, const Execut
 // Handlers
 // ---------------------------------------------------------------------------
 
-void Process::handlePrint(const DecodedInstruction& decoded, const ExecutionContext& ctx)
+void Process::handlePrint(const DecodedInstruction& /*decoded*/, const ExecutionContext& ctx)
 {
-    const std::string line = "(" + formatTimestamp(ctx.timestamp) + ") Core:" +
-                             std::to_string(ctx.core) + " \"" + decoded.printOutput + "\"";
+    // Appends the required format: <process_name> | (<DATE-TIME>) | Core: <CORE> <curr_line>/<total_lines>
+    const std::string line = generateLogLine(ctx.core, ctx.timestamp);
     appendLog(line);
 }
 
@@ -332,7 +367,7 @@ void Process::handleFor(const DecodedInstruction& decoded, const ExecutionContex
 
 void Process::handleInvalid(const DecodedInstruction& /*decoded*/, const ExecutionContext& /*ctx*/)
 {
-    // Rejects invalid instructions gracefully without crashing the worker thread
+    // Gracefully ignore invalid instructions
 }
 
 void Process::advanceInstructionPointer()
@@ -358,7 +393,6 @@ void Process::advanceInstructionPointer()
     }
 }
 
-// Performs one full fetch -> decode -> execute -> advances curr_line exactly once
 bool Process::step(uint32_t core)
 {
     if (isFinished())
@@ -401,21 +435,18 @@ void Process::executeNext(uint32_t core, uint64_t delayPerExec)
         return;
     }
 
-    // Process is sleeping: tick sleep duration
     if (state_.load() == ProcessState::Waiting)
     {
         tickSleep();
         return;
     }
 
-    // Busy-wait delay cycles
     if (delayRemaining_ > 0)
     {
         --delayRemaining_;
         return;
     }
 
-    // Execute exactly one instruction step
     const bool executed = step(core);
 
     if (executed && !isFinished() && state_.load() != ProcessState::Waiting)
@@ -448,7 +479,6 @@ std::vector<Instruction> Process::generateRandomInstructions(
     std::vector<Instruction> result;
     result.reserve(static_cast<size_t>(totalCount));
 
-    // Initial declaration
     result.push_back(Instruction::makeDeclare(varPool[0], valDist(rng)));
 
     for (uint64_t i = 1; i < totalCount; ++i)

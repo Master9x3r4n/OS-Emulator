@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <fstream>
 #include <memory>
 #include <mutex>
@@ -56,23 +57,18 @@ struct Operand {
 struct Instruction {
     InstructionType type = InstructionType::Print;
 
-    // PRINT
     std::string message;
     std::string printVar;
 
-    // DECLARE
     std::string declareVar;
     uint16_t declareValue = 0;
 
-    // ADD / SUBTRACT
     std::string destVar;
     Operand op1;
     Operand op2;
 
-    // SLEEP
     uint8_t sleepTicks = 0;
 
-    // FOR
     uint32_t repeats = 1;
     std::vector<Instruction> nestedInstructions;
 
@@ -143,7 +139,6 @@ struct DecodedInstruction {
     uint32_t forRepeats = 0;
 };
 
-// Execution context available to every instruction handler
 struct ExecutionContext {
     Process& process;
     uint32_t core;
@@ -153,18 +148,13 @@ struct ExecutionContext {
 class Process {
 public:
     static constexpr size_t kMaxNameLength = 14;
+    static constexpr size_t kDefaultMaxLogs = 1000;
 
-    // Constructors:
-    // 1. With explicit count (backward-compatible)
     Process(uint32_t id, std::string name = "", uint32_t instructionCount = 0);
-    // 2. With config instruction bounds [minIns, maxIns]
     Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns);
-    // 3. With explicit pre-built instructions
     Process(uint32_t id, std::string name, std::vector<Instruction> instructions);
-
     ~Process();
 
-    // Process Attributes
     uint32_t id() const { return id_; }
     const std::string& name() const { return name_; }
     const std::string& createdAt() const { return createdAt_; }
@@ -180,9 +170,7 @@ public:
     void markRunning(int core);
     const std::string& startedAt() const { return startedAt_; }
 
-    // =========================================================================
-    // Symbol Table Access & Methods
-    // =========================================================================
+    // Symbol Table
     SymbolTable& symbolTable() { return symbolTable_; }
     const SymbolTable& symbolTable() const { return symbolTable_; }
     SymbolTable& getSymbolTable() { return symbolTable_; }
@@ -191,42 +179,43 @@ public:
     void declareVariable(const std::string& var, int64_t value = 0);
     uint16_t readVariable(const std::string& var);
     void writeVariable(const std::string& var, int64_t value);
-
     void storeVariable(const std::string& var, int64_t value);
     uint16_t fetchVariable(const std::string& var);
     bool hasVariable(const std::string& var) const;
     std::unordered_map<std::string, uint16_t> getSymbolTableSnapshot() const;
 
-    // Logging & Reporting
+    // =========================================================================
+    // Logging & In-Memory Buffer
+    // =========================================================================
     void enableFileLogging(const std::string& dir);
-    std::string generateLogLine(int core) const;
-    std::vector<std::string> getLogs() const;
+
+    // Formats: <process_name> | (<DATE-TIME>) | Core: <CORE> <curr_line>/<total_lines>
+    std::string generateLogLine(int core, std::chrono::system_clock::time_point tp = std::chrono::system_clock::now()) const;
+
     void appendLog(const std::string& logLine);
+    void addLog(const std::string& logLine) { appendLog(logLine); }
+    void log(uint32_t core) { appendLog(generateLogLine(core)); }
+
+    std::vector<std::string> getLogs() const;
+    std::vector<std::string> logs() const { return getLogs(); }
+    size_t logCount() const;
+    void clearLogs();
+
+    size_t maxLogCapacity() const;
+    void setMaxLogCapacity(size_t cap);
 
     // Sleep Management
     void putToSleep(uint8_t ticks);
     void tickSleep();
 
     // Pipeline Methods
-    // =========================================================================
-
-    // 1. Fetch: Returns instruction at specific line, or nullptr if past end
     const Instruction* fetch(uint32_t line) const;
     const Instruction* fetchInstruction() const;
-
-    // 2. Decode: Resolves instruction type and operands
     DecodedInstruction decodeInstruction(const Instruction& inst);
-
-    // 3. Execute: Dispatches decoded instruction to its handler
     void executeInstruction(const DecodedInstruction& decoded, const ExecutionContext& ctx);
-
-    // 4. Step: Performs full fetch -> decode -> execute -> advances curr_line
     bool step(uint32_t core);
-
-    // Called by scheduler worker each tick (handles busy-wait and sleep delays)
     void executeNext(uint32_t core, uint64_t delayPerExec);
 
-    // Helper generator
     static std::vector<Instruction> generateRandomInstructions(
         uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t maxDepth = 3);
 
@@ -242,7 +231,6 @@ private:
     uint16_t resolveOperand(const Operand& op);
     void advanceInstructionPointer();
 
-    // Handlers (extensible per instruction type)
     void handlePrint(const DecodedInstruction& decoded, const ExecutionContext& ctx);
     void handleDeclare(const DecodedInstruction& decoded, const ExecutionContext& ctx);
     void handleAdd(const DecodedInstruction& decoded, const ExecutionContext& ctx);
@@ -266,7 +254,8 @@ private:
     SymbolTable symbolTable_;
 
     mutable std::mutex logMtx_;
-    std::vector<std::string> logs_;
+    std::deque<std::string> logs_;
+    size_t maxLogs_ = kDefaultMaxLogs;
 
     std::vector<LoopFrame> loopStack_;
 

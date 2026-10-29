@@ -58,12 +58,17 @@ void handleScreenCommand(const std::vector<std::string>& args) {
     if (flag == "-ls") {
         GenerateReport(scheduler->snapshot());
     }
-    else if (flag == "-s" && args.size() >= 3) {
-        // TODO 3: call module to create new process then move to process
-        std::cout << "X command recognized. Doing something." << args[2] << "\n";
+    else if (flag == "-s") {
+        std::string procName = (args.size() >= 3) ? args[2] : "";
+        auto p = scheduler->createProcess(procName);
+        if (p) {
+            std::cout << "Created process '" << p->name() << "' (ID: " << p->id()
+                      << ") with " << p->totalInstructions() << " instructions.\n";
+        } else {
+            std::cout << "Error: Process creation failed (duplicate name or invalid).\n";
+        }
     }
     else if (flag == "-r" && args.size() >= 3) {
-        // TODO 3: call module to move to process
         std::cout << "X command recognized. Doing something." << args[2] << "\n";
     }
     else {
