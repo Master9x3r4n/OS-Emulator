@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -8,6 +9,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+class Process;
 
 enum class ProcessState {
     Ready,
@@ -22,7 +25,8 @@ enum class InstructionType {
     Add,
     Subtract,
     Sleep,
-    For
+    For,
+    Invalid
 };
 
 struct Operand {
@@ -50,23 +54,23 @@ struct Operand {
 struct Instruction {
     InstructionType type = InstructionType::Print;
 
-    // PRINT:
+    // PRINT
     std::string message;
     std::string printVar;
 
-    // DECLARE:
+    // DECLARE
     std::string declareVar;
     uint16_t declareValue = 0;
 
-    // ADD / SUBTRACT:
+    // ADD / SUBTRACT
     std::string destVar;
     Operand op1;
     Operand op2;
 
-    // SLEEP:
+    // SLEEP
     uint8_t sleepTicks = 0;
 
-    // FOR:
+    // FOR
     uint32_t repeats = 1;
     std::vector<Instruction> nestedInstructions;
 
@@ -118,16 +122,30 @@ struct Instruction {
         inst.repeats = repeats;
         return inst;
     }
+
+    static Instruction makeInvalid() {
+        Instruction inst;
+        inst.type = InstructionType::Invalid;
+        return inst;
+    }
 };
 
 struct DecodedInstruction {
-    InstructionType type = InstructionType::Print;
+    InstructionType type = InstructionType::Invalid;
+    bool isValid = true;
     std::string printOutput;
     std::string targetVar;
     uint16_t computedValue = 0;
     uint8_t sleepTicks = 0;
     const std::vector<Instruction>* forBody = nullptr;
     uint32_t forRepeats = 0;
+};
+
+// Execution context available to every instruction handler
+struct ExecutionContext {
+    Process& process;
+    uint32_t core;
+    std::chrono::system_clock::time_point timestamp;
 };
 
 class Process {
@@ -157,11 +175,10 @@ public:
     ProcessState state() const { return state_.load(); }
     void setState(ProcessState s) { state_.store(s); }
     int core() const { return core_.load(); }
-
     void markRunning(int core);
     const std::string& startedAt() const { return startedAt_; }
 
-    // Memory / Symbol Table Management (uint16 clamped between [0, 65535])
+    // Memory / Symbol Table (uint16 clamped [0, 65535])
     void storeVariable(const std::string& var, uint32_t value);
     uint16_t fetchVariable(const std::string& var);
     bool hasVariable(const std::string& var) const;
@@ -171,20 +188,33 @@ public:
     void enableFileLogging(const std::string& dir);
     std::string generateLogLine(int core) const;
     std::vector<std::string> getLogs() const;
+    void appendLog(const std::string& logLine);
 
     // Sleep Management
     void putToSleep(uint8_t ticks);
     void tickSleep();
 
-    // Instruction Pipeline
-    const Instruction& fetchInstruction() const;
-    DecodedInstruction decodeInstruction(const Instruction& inst);
-    void executeInstruction(const DecodedInstruction& decoded, uint32_t core);
+    // =========================================================================
+    // Pipeline Methods
+    // =========================================================================
 
-    // Executes one CPU tick of work
+    // 1. Fetch: Returns instruction at specific line, or nullptr if past end
+    const Instruction* fetch(uint32_t line) const;
+    const Instruction* fetchInstruction() const;
+
+    // 2. Decode: Resolves instruction type and operands
+    DecodedInstruction decodeInstruction(const Instruction& inst);
+
+    // 3. Execute: Dispatches decoded instruction to its handler
+    void executeInstruction(const DecodedInstruction& decoded, const ExecutionContext& ctx);
+
+    // 4. Step: Performs full fetch -> decode -> execute -> advances curr_line
+    bool step(uint32_t core);
+
+    // Called by scheduler worker each tick (handles busy-wait and sleep delays)
     void executeNext(uint32_t core, uint64_t delayPerExec);
 
-    // Random Instruction Generator
+    // Helper generator
     static std::vector<Instruction> generateRandomInstructions(
         uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t maxDepth = 3);
 
@@ -199,7 +229,15 @@ private:
     static std::string sanitizeOrGenerateName(uint32_t id, std::string name);
     uint16_t resolveOperand(const Operand& op);
     void advanceInstructionPointer();
-    void appendLog(const std::string& logLine);
+
+    // Handlers (extensible per instruction type)
+    void handlePrint(const DecodedInstruction& decoded, const ExecutionContext& ctx);
+    void handleDeclare(const DecodedInstruction& decoded, const ExecutionContext& ctx);
+    void handleAdd(const DecodedInstruction& decoded, const ExecutionContext& ctx);
+    void handleSubtract(const DecodedInstruction& decoded, const ExecutionContext& ctx);
+    void handleSleep(const DecodedInstruction& decoded, const ExecutionContext& ctx);
+    void handleFor(const DecodedInstruction& decoded, const ExecutionContext& ctx);
+    void handleInvalid(const DecodedInstruction& decoded, const ExecutionContext& ctx);
 
     uint32_t id_;
     std::string name_;

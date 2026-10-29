@@ -89,7 +89,7 @@ uint16_t Process::fetchVariable(const std::string& var)
     auto it = symbolTable_.find(var);
     if (it == symbolTable_.end())
     {
-        symbolTable_[var] = 0; // Auto-declared with 0 if undeclared
+        symbolTable_[var] = 0; // Auto-declare undeclared variables with 0
         return 0;
     }
     return it->second;
@@ -187,28 +187,33 @@ void Process::tickSleep()
 }
 
 // ---------------------------------------------------------------------------
-// Instruction Pipeline: Fetch, Decode, Execute
+// Pipeline: Fetch, Decode, Execute
 // ---------------------------------------------------------------------------
 
-const Instruction& Process::fetchInstruction() const
+const Instruction* Process::fetch(uint32_t line) const
+{
+    if (line < instructions_.size())
+        return &instructions_[line];
+    return nullptr; // Returns nullptr past the end of the list
+}
+
+const Instruction* Process::fetchInstruction() const
 {
     if (!loopStack_.empty())
     {
         const auto& top = loopStack_.back();
-        return top.instructions->at(top.pc);
+        if (top.instructions && top.pc < top.instructions->size())
+            return &top.instructions->at(top.pc);
+        return nullptr;
     }
-    const uint32_t idx = executed_.load();
-    if (idx < instructions_.size())
-        return instructions_[idx];
-
-    static const Instruction kFinishedFallback = Instruction::makePrint();
-    return kFinishedFallback;
+    return fetch(executed_.load());
 }
 
 DecodedInstruction Process::decodeInstruction(const Instruction& inst)
 {
     DecodedInstruction dec;
     dec.type = inst.type;
+    dec.isValid = true;
 
     switch (inst.type)
     {
@@ -235,8 +240,7 @@ DecodedInstruction Process::decodeInstruction(const Instruction& inst)
         dec.targetVar = inst.destVar;
         const uint32_t a = resolveOperand(inst.op1);
         const uint32_t b = resolveOperand(inst.op2);
-        const uint32_t sum = a + b;
-        dec.computedValue = static_cast<uint16_t>(std::min<uint32_t>(sum, 65535U));
+        dec.computedValue = static_cast<uint16_t>(std::min<uint32_t>(a + b, 65535U));
         break;
     }
     case InstructionType::Subtract: {
@@ -244,8 +248,7 @@ DecodedInstruction Process::decodeInstruction(const Instruction& inst)
         const int32_t a = resolveOperand(inst.op1);
         const int32_t b = resolveOperand(inst.op2);
         const int32_t diff = a - b;
-        const int32_t clamped = std::clamp<int32_t>(diff, 0, 65535);
-        dec.computedValue = static_cast<uint16_t>(clamped);
+        dec.computedValue = static_cast<uint16_t>(std::clamp<int32_t>(diff, 0, 65535));
         break;
     }
     case InstructionType::Sleep: {
@@ -257,50 +260,76 @@ DecodedInstruction Process::decodeInstruction(const Instruction& inst)
         dec.forRepeats = inst.repeats;
         break;
     }
+    default: {
+        dec.type = InstructionType::Invalid;
+        dec.isValid = false;
+        break;
+    }
     }
     return dec;
 }
 
-void Process::executeInstruction(const DecodedInstruction& decoded, uint32_t core)
+void Process::executeInstruction(const DecodedInstruction& decoded, const ExecutionContext& ctx)
 {
     switch (decoded.type)
     {
-    case InstructionType::Print: {
-        const std::string line = "(" + formatTimestamp() + ") Core:" + std::to_string(core) +
-                                 " \"" + decoded.printOutput + "\"";
-        appendLog(line);
-        advanceInstructionPointer();
-        break;
+    case InstructionType::Print:    handlePrint(decoded, ctx);    break;
+    case InstructionType::Declare:  handleDeclare(decoded, ctx);  break;
+    case InstructionType::Add:      handleAdd(decoded, ctx);      break;
+    case InstructionType::Subtract: handleSubtract(decoded, ctx); break;
+    case InstructionType::Sleep:    handleSleep(decoded, ctx);    break;
+    case InstructionType::For:      handleFor(decoded, ctx);      break;
+    default:                        handleInvalid(decoded, ctx);  break;
     }
-    case InstructionType::Declare:
-    case InstructionType::Add:
-    case InstructionType::Subtract: {
-        storeVariable(decoded.targetVar, decoded.computedValue);
-        advanceInstructionPointer();
-        break;
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+void Process::handlePrint(const DecodedInstruction& decoded, const ExecutionContext& ctx)
+{
+    const std::string line = "(" + formatTimestamp(ctx.timestamp) + ") Core:" +
+                             std::to_string(ctx.core) + " \"" + decoded.printOutput + "\"";
+    appendLog(line);
+}
+
+void Process::handleDeclare(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
+{
+    storeVariable(decoded.targetVar, decoded.computedValue);
+}
+
+void Process::handleAdd(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
+{
+    storeVariable(decoded.targetVar, decoded.computedValue);
+}
+
+void Process::handleSubtract(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
+{
+    storeVariable(decoded.targetVar, decoded.computedValue);
+}
+
+void Process::handleSleep(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
+{
+    putToSleep(decoded.sleepTicks);
+}
+
+void Process::handleFor(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
+{
+    if (decoded.forBody && !decoded.forBody->empty() && decoded.forRepeats > 0)
+    {
+        LoopFrame frame;
+        frame.instructions = decoded.forBody;
+        frame.totalRepeats = decoded.forRepeats;
+        frame.currentRepeat = 0;
+        frame.pc = 0;
+        loopStack_.push_back(frame);
     }
-    case InstructionType::Sleep: {
-        putToSleep(decoded.sleepTicks);
-        advanceInstructionPointer();
-        break;
-    }
-    case InstructionType::For: {
-        if (decoded.forBody && !decoded.forBody->empty() && decoded.forRepeats > 0)
-        {
-            LoopFrame frame;
-            frame.instructions = decoded.forBody;
-            frame.totalRepeats = decoded.forRepeats;
-            frame.currentRepeat = 0;
-            frame.pc = 0;
-            loopStack_.push_back(frame);
-        }
-        else
-        {
-            advanceInstructionPointer();
-        }
-        break;
-    }
-    }
+}
+
+void Process::handleInvalid(const DecodedInstruction& /*decoded*/, const ExecutionContext& /*ctx*/)
+{
+    // Rejects invalid instructions gracefully without crashing the worker thread
 }
 
 void Process::advanceInstructionPointer()
@@ -326,6 +355,41 @@ void Process::advanceInstructionPointer()
     }
 }
 
+// Performs one full fetch -> decode -> execute -> advances curr_line exactly once
+bool Process::step(uint32_t core)
+{
+    if (isFinished())
+        return false;
+
+    const Instruction* inst = fetchInstruction();
+    if (!inst)
+    {
+        state_.store(ProcessState::Finished);
+        return false;
+    }
+
+    ExecutionContext ctx{*this, core, std::chrono::system_clock::now()};
+    const DecodedInstruction dec = decodeInstruction(*inst);
+
+    const size_t depthBefore = loopStack_.size();
+    executeInstruction(dec, ctx);
+
+    // Skip advancing when a new loop frame was just pushed so body[0] executes first
+    if (loopStack_.size() <= depthBefore)
+    {
+        advanceInstructionPointer();
+    }
+
+    if (loopStack_.empty() && executed_.load() >= totalInstructions())
+    {
+        state_.store(ProcessState::Finished);
+        if (logFile_.is_open())
+            logFile_.close();
+    }
+
+    return true;
+}
+
 void Process::executeNext(uint32_t core, uint64_t delayPerExec)
 {
     if (isFinished())
@@ -348,19 +412,10 @@ void Process::executeNext(uint32_t core, uint64_t delayPerExec)
         return;
     }
 
-    // Fetch -> Decode -> Execute
-    const Instruction& inst = fetchInstruction();
-    const DecodedInstruction dec = decodeInstruction(inst);
-    executeInstruction(dec, core);
+    // Execute exactly one instruction step
+    const bool executed = step(core);
 
-    // Self-transition to FINISHED once all instructions have completed
-    if (loopStack_.empty() && executed_.load() >= totalInstructions())
-    {
-        state_.store(ProcessState::Finished);
-        if (logFile_.is_open())
-            logFile_.close();
-    }
-    else if (state_.load() != ProcessState::Waiting)
+    if (executed && !isFinished() && state_.load() != ProcessState::Waiting)
     {
         delayRemaining_ = delayPerExec;
     }
@@ -377,11 +432,11 @@ std::vector<Instruction> Process::generateRandomInstructions(
 
     const uint64_t low = std::max<uint64_t>(1ULL, minIns);
     const uint64_t high = std::max<uint64_t>(low, maxIns);
-    std::uniform_int_distribution<uint64_t> countDist(low, high);
+    std::uniform_int_distribution<unsigned long long> countDist(low, high);
     const uint64_t totalCount = countDist(rng);
 
     const std::vector<std::string> varPool = {"x", "y", "z", "count"};
-    std::uniform_int_distribution<size_t> varDist(0, varPool.size() - 1);
+    std::uniform_int_distribution<int> varDist(0, static_cast<int>(varPool.size() - 1));
     std::uniform_int_distribution<int> typeDist(0, (maxDepth > 0) ? 5 : 4);
     std::uniform_int_distribution<uint16_t> valDist(1, 100);
     std::uniform_int_distribution<int> boolDist(0, 1);
@@ -390,7 +445,7 @@ std::vector<Instruction> Process::generateRandomInstructions(
     std::vector<Instruction> result;
     result.reserve(static_cast<size_t>(totalCount));
 
-    // Ensure initial declaration
+    // Initial declaration
     result.push_back(Instruction::makeDeclare(varPool[0], valDist(rng)));
 
     for (uint64_t i = 1; i < totalCount; ++i)
@@ -434,10 +489,10 @@ std::vector<Instruction> Process::generateRandomInstructions(
             break;
         }
         case 4: { // SLEEP
-            result.push_back(Instruction::makeSleep(sleepDist(rng)));
+            result.push_back(Instruction::makeSleep(static_cast<uint8_t>(sleepDist(rng))));
             break;
         }
-        case 5: { // FOR (nested up to maxDepth)
+        case 5: { // FOR
             std::vector<Instruction> loopBody;
             loopBody.push_back(Instruction::makeAdd(varPool[0], Operand::fromVariable(varPool[0]), Operand::fromValue(1)));
             loopBody.push_back(Instruction::makePrint("Loop iteration in " + procName));
