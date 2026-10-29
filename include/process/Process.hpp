@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "SymbolTable.hpp"
+
 class Process;
 
 enum class ProcessState {
@@ -178,8 +180,19 @@ public:
     void markRunning(int core);
     const std::string& startedAt() const { return startedAt_; }
 
-    // Memory / Symbol Table (uint16 clamped [0, 65535])
-    void storeVariable(const std::string& var, uint32_t value);
+    // =========================================================================
+    // Symbol Table Access & Methods
+    // =========================================================================
+    SymbolTable& symbolTable() { return symbolTable_; }
+    const SymbolTable& symbolTable() const { return symbolTable_; }
+    SymbolTable& getSymbolTable() { return symbolTable_; }
+    const SymbolTable& getSymbolTable() const { return symbolTable_; }
+
+    void declareVariable(const std::string& var, int64_t value = 0);
+    uint16_t readVariable(const std::string& var);
+    void writeVariable(const std::string& var, int64_t value);
+
+    void storeVariable(const std::string& var, int64_t value);
     uint16_t fetchVariable(const std::string& var);
     bool hasVariable(const std::string& var) const;
     std::unordered_map<std::string, uint16_t> getSymbolTableSnapshot() const;
@@ -194,7 +207,6 @@ public:
     void putToSleep(uint8_t ticks);
     void tickSleep();
 
-    // =========================================================================
     // Pipeline Methods
     // =========================================================================
 
@@ -251,8 +263,7 @@ private:
     uint64_t delayRemaining_ = 0;
     uint32_t sleepTicksRemaining_ = 0;
 
-    mutable std::mutex memoryMtx_;
-    std::unordered_map<std::string, uint16_t> symbolTable_;
+    SymbolTable symbolTable_;
 
     mutable std::mutex logMtx_;
     std::vector<std::string> logs_;

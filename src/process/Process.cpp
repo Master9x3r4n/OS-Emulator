@@ -76,42 +76,46 @@ void Process::enableFileLogging(const std::string& dir)
 // Memory / Symbol Table (uint16 clamped between [0, 65535])
 // ---------------------------------------------------------------------------
 
-void Process::storeVariable(const std::string& var, uint32_t value)
+void Process::declareVariable(const std::string& var, int64_t value)
 {
-    std::lock_guard<std::mutex> lk(memoryMtx_);
-    const uint32_t clamped = std::min<uint32_t>(value, 65535U);
-    symbolTable_[var] = static_cast<uint16_t>(clamped);
+    symbolTable_.declare(var, value);
+}
+
+uint16_t Process::readVariable(const std::string& var)
+{
+    return symbolTable_.read(var);
+}
+
+void Process::writeVariable(const std::string& var, int64_t value)
+{
+    symbolTable_.write(var, value);
+}
+
+void Process::storeVariable(const std::string& var, int64_t value)
+{
+    symbolTable_.write(var, value);
 }
 
 uint16_t Process::fetchVariable(const std::string& var)
 {
-    std::lock_guard<std::mutex> lk(memoryMtx_);
-    auto it = symbolTable_.find(var);
-    if (it == symbolTable_.end())
-    {
-        symbolTable_[var] = 0; // Auto-declare undeclared variables with 0
-        return 0;
-    }
-    return it->second;
+    return symbolTable_.read(var);
 }
 
 bool Process::hasVariable(const std::string& var) const
 {
-    std::lock_guard<std::mutex> lk(memoryMtx_);
-    return symbolTable_.find(var) != symbolTable_.end();
+    return symbolTable_.has(var);
 }
 
 std::unordered_map<std::string, uint16_t> Process::getSymbolTableSnapshot() const
 {
-    std::lock_guard<std::mutex> lk(memoryMtx_);
-    return symbolTable_;
+    return symbolTable_.snapshot();
 }
 
 uint16_t Process::resolveOperand(const Operand& op)
 {
     if (op.isVariable)
         return fetchVariable(op.varName);
-    return std::min<uint16_t>(op.literalValue, 65535U);
+    return SymbolTable::clamp(op.literalValue);
 }
 
 // ---------------------------------------------------------------------------
@@ -238,17 +242,16 @@ DecodedInstruction Process::decodeInstruction(const Instruction& inst)
     }
     case InstructionType::Add: {
         dec.targetVar = inst.destVar;
-        const uint32_t a = resolveOperand(inst.op1);
-        const uint32_t b = resolveOperand(inst.op2);
-        dec.computedValue = static_cast<uint16_t>(std::min<uint32_t>(a + b, 65535U));
+        const int64_t a = resolveOperand(inst.op1);
+        const int64_t b = resolveOperand(inst.op2);
+        dec.computedValue = SymbolTable::clamp(a + b);
         break;
     }
     case InstructionType::Subtract: {
         dec.targetVar = inst.destVar;
-        const int32_t a = resolveOperand(inst.op1);
-        const int32_t b = resolveOperand(inst.op2);
-        const int32_t diff = a - b;
-        dec.computedValue = static_cast<uint16_t>(std::clamp<int32_t>(diff, 0, 65535));
+        const int64_t a = resolveOperand(inst.op1);
+        const int64_t b = resolveOperand(inst.op2);
+        dec.computedValue = SymbolTable::clamp(a - b);
         break;
     }
     case InstructionType::Sleep: {
@@ -296,17 +299,17 @@ void Process::handlePrint(const DecodedInstruction& decoded, const ExecutionCont
 
 void Process::handleDeclare(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
 {
-    storeVariable(decoded.targetVar, decoded.computedValue);
+    declareVariable(decoded.targetVar, decoded.computedValue);
 }
 
 void Process::handleAdd(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
 {
-    storeVariable(decoded.targetVar, decoded.computedValue);
+    writeVariable(decoded.targetVar, decoded.computedValue);
 }
 
 void Process::handleSubtract(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
 {
-    storeVariable(decoded.targetVar, decoded.computedValue);
+    writeVariable(decoded.targetVar, decoded.computedValue);
 }
 
 void Process::handleSleep(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
