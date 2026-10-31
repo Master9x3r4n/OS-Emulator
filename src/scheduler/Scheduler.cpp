@@ -1,20 +1,22 @@
 #include <scheduler/Scheduler.hpp>
 
-#include <filesystem>
 #include <iostream>
 #include <system_error>
 
-Scheduler::Scheduler(const Config& config, std::string logDir,
-                     std::chrono::milliseconds tickDuration)
+Scheduler::Scheduler(const Config& config, std::chrono::milliseconds tickDuration)
     : policy_(config.scheduler == "rr" ? Policy::RoundRobin : Policy::FCFS),
       numCores_(static_cast<uint32_t>(config.numCpu)),
       quantumCycles_(config.quantumCycles),
       delayPerExec_(config.delayPerExec),
       tickDuration_(tickDuration),
-      logDir_(std::move(logDir)),
-      loggingEnabled_(SchedulerSettings::kEnablePrintFileLogging),
       slots_(numCores_),
       quantumUsed_(numCores_, 0)
+{
+}
+
+Scheduler::Scheduler(const Config& config, const std::string& /*logDir*/,
+                     std::chrono::milliseconds tickDuration)
+    : Scheduler(config, tickDuration)
 {
 }
 
@@ -30,18 +32,6 @@ bool Scheduler::start()
         if (running_)
             return true;
         running_ = true;
-    }
-
-    if (loggingEnabled_)
-    {
-        std::error_code ec;
-        std::filesystem::create_directories(logDir_, ec);
-        if (ec)
-        {
-            std::cerr << "Warning: could not create log directory '" << logDir_
-                      << "' (" << ec.message() << "); print logging disabled.\n";
-            loggingEnabled_ = false;
-        }
     }
 
     try
@@ -90,8 +80,18 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
         return nullptr;
 
     auto p = std::make_shared<Process>(nextId_++, name, instructionCount);
-    if (loggingEnabled_)
-        p->enableFileLogging(logDir_);
+    ready_.push_back(p);
+    return p;
+}
+
+std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
+                                                  std::vector<Instruction> instructions)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (nameExistsLocked(name))
+        return nullptr;
+
+    auto p = std::make_shared<Process>(nextId_++, name, std::move(instructions));
     ready_.push_back(p);
     return p;
 }
@@ -136,7 +136,6 @@ void Scheduler::schedulerLoop()
     }
 }
 
-// Fill idle cores from the front of the shared FIFO ready queue.
 void Scheduler::dispatchLocked()
 {
     for (uint32_t c = 0; c < numCores_; ++c)
@@ -152,8 +151,6 @@ void Scheduler::dispatchLocked()
     }
 }
 
-// After a tick: retire finished processes and, for round robin, rotate out
-// processes whose quantum expired. FCFS never preempts.
 void Scheduler::collectLocked()
 {
     for (uint32_t c = 0; c < numCores_; ++c)
@@ -173,12 +170,10 @@ void Scheduler::collectLocked()
         {
             if (!ready_.empty())
             {
-                // Someone is waiting: go to the back of the queue.
                 p->setState(ProcessState::Ready);
                 ready_.push_back(std::move(p));
                 p.reset();
             }
-            // Nobody waiting: keep the core and start a fresh quantum.
             quantumUsed_[c] = 0;
         }
     }
@@ -203,7 +198,6 @@ void Scheduler::workerLoop(uint32_t core)
         lk.unlock();
         if (proc)
         {
-            // This worker exclusively owns `proc` for the duration of the tick.
             proc->executeNext(core, delayPerExec_);
             ++quantumUsed_[core];
         }

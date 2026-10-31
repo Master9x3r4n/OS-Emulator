@@ -12,6 +12,7 @@
 #include <config/Config.hpp>
 #include <scheduler/Scheduler.hpp>
 
+
 Config config;
 std::unique_ptr<Scheduler> scheduler;
 
@@ -27,7 +28,7 @@ bool initializeEmulator(const std::string& configPath) {
     if (!config.initialize(configPath))
         return false;
 
-    scheduler = std::make_unique<Scheduler>(config, std::string(PROJECT_DIR) + "/logs");
+    scheduler = std::make_unique<Scheduler>(config);
     if (!scheduler->start()) {
         scheduler.reset();
         return false;

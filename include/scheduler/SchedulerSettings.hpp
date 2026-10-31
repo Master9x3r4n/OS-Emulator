@@ -16,7 +16,7 @@ inline constexpr std::chrono::milliseconds kTickDuration{100};
 // kEnablePrintFileLogging: every process writes its PRINT output to
 //   logs/<process_name>.txt (file I/O hurts scheduler performance).
 // kSeedTestProcesses: create test processes right after "initialize".
-inline constexpr bool kEnablePrintFileLogging = false;
+// inline constexpr bool kEnablePrintFileLogging = false;
 inline constexpr bool kSeedTestProcesses = false;
 inline constexpr uint32_t kTestProcessCount = 10;
 inline constexpr uint32_t kTestProcessInstructions = 100;
