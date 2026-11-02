@@ -50,11 +50,7 @@ Process::Process(uint32_t id, std::string name, std::vector<Instruction> instruc
     }
 }
 
-Process::~Process()
-{
-    if (logFile_.is_open())
-        logFile_.close();
-}
+Process::~Process() = default;
 
 void Process::markRunning(int core)
 {
@@ -62,14 +58,6 @@ void Process::markRunning(int core)
     state_.store(ProcessState::Running);
     if (startedAt_.empty())
         startedAt_ = formatTimestamp();
-}
-
-void Process::enableFileLogging(const std::string& dir)
-{
-    if (!SchedulerSettings::kEnablePrintFileLogging)
-        return;
-    logPath_ = dir + "/" + name_ + ".txt";
-    fileLoggingEnabled_ = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,40 +110,26 @@ uint16_t Process::resolveOperand(const Operand& op)
 // In-Memory Log Buffer & Formatting
 // ---------------------------------------------------------------------------
 
-std::string Process::generateLogLine(int core, std::chrono::system_clock::time_point tp) const
+std::string Process::generateLogLine(int core, const std::string& message, std::chrono::system_clock::time_point tp) const
 {
     const std::string coreStr = (core >= 0) ? std::to_string(core) : "N/A";
-    return name_ + " | (" + formatTimestamp(tp) + ") | Core: " + coreStr + " " +
-           std::to_string(executed_.load()) + "/" + std::to_string(totalInstructions());
+    std::string text = message.empty() ? ("Hello world from " + name_ + "!") : message;
+    if (text.empty() || text.front() != '"') {
+        text = "\"" + text + "\"";
+    }
+    return name_ + " " + "(" + formatTimestamp(tp) + ") Core: " + coreStr + " " + text ;
 }
 
 void Process::appendLog(const std::string& logLine)
 {
+    std::lock_guard<std::mutex> lk(logMtx_);
+    if (maxLogs_ > 0)
     {
-        std::lock_guard<std::mutex> lk(logMtx_);
-        if (maxLogs_ > 0)
+        while (logs_.size() >= maxLogs_)
         {
-            while (logs_.size() >= maxLogs_)
-            {
-                logs_.pop_front();
-            }
-            logs_.push_back(logLine);
+            logs_.pop_front();
         }
-    }
-
-    if (fileLoggingEnabled_)
-    {
-        if (!logFile_.is_open())
-        {
-            logFile_.open(logPath_, std::ios::out | std::ios::trunc);
-            if (!logFile_.is_open())
-            {
-                fileLoggingEnabled_ = false;
-                return;
-            }
-            logFile_ << "Process name: " << name_ << "\nLogs:\n\n";
-        }
-        logFile_ << logLine << "\n";
+        logs_.push_back(logLine);
     }
 }
 
@@ -325,10 +299,10 @@ void Process::executeInstruction(const DecodedInstruction& decoded, const Execut
 // Handlers
 // ---------------------------------------------------------------------------
 
-void Process::handlePrint(const DecodedInstruction& /*decoded*/, const ExecutionContext& ctx)
+void Process::handlePrint(const DecodedInstruction& decoded, const ExecutionContext& ctx)
 {
     // Appends the required format: <process_name> | (<DATE-TIME>) | Core: <CORE> <curr_line>/<total_lines>
-    const std::string line = generateLogLine(ctx.core, ctx.timestamp);
+    const std::string line = generateLogLine(ctx.core, decoded.printOutput, ctx.timestamp);
     appendLog(line);
 }
 
@@ -420,8 +394,6 @@ bool Process::step(uint32_t core)
     if (loopStack_.empty() && executed_.load() >= totalInstructions())
     {
         state_.store(ProcessState::Finished);
-        if (logFile_.is_open())
-            logFile_.close();
     }
 
     return true;

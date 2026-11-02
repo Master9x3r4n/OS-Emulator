@@ -48,6 +48,56 @@ struct Command {
     std::function<void(const std::vector<std::string>&)> handler;
 };
 
+void renderProcessScreen(const std::shared_ptr<Process>& proc)
+{
+    clearScreen();
+    std::cout << "Process: " << proc->name() << "\n"
+              << "ID: " << proc->id() << "\n\n"
+              << "Current instruction: " << proc->executedInstructions() << "\n"
+              << "Lines of code: " << proc->totalInstructions() << "\n\n";
+
+    std::cout << "Logs:\n";
+    const auto logs = proc->getLogs();
+    for (const auto& line : logs) {
+        std::cout << line << "\n";
+    }
+
+    if (proc->isFinished()) {
+        std::cout << "\nFinished!\n";
+    }
+}
+
+void attachProcessScreen(const std::shared_ptr<Process>& proc)
+{
+    proc->setAttached(true);
+    renderProcessScreen(proc);
+
+    while (true) {
+        std::vector<std::string> input = getInput();
+        if (input.empty() || input[0].empty()) {
+            continue;
+        }
+
+        const std::string& cmd = input[0];
+        if (cmd == "exit") {
+            break;
+        }
+        else if (cmd == "process-smi") {
+            renderProcessScreen(proc);
+        }
+        else if (cmd == "clear") {
+            clearScreen();
+        }
+        else {
+            std::cout << "Unknown command. Valid commands: 'process-smi', 'clear', 'exit'\n";
+        }
+    }
+
+    proc->setAttached(false);
+    clearScreen();
+    displayConsole();
+}
+
 void handleScreenCommand(const std::vector<std::string>& args) {
     if (args.size() < 2) {
         displayScreenHelp();
@@ -68,8 +118,18 @@ void handleScreenCommand(const std::vector<std::string>& args) {
             std::cout << "Error: Process creation failed (duplicate name or invalid).\n";
         }
     }
-    else if (flag == "-r" && args.size() >= 3) {
-        std::cout << "X command recognized. Doing something." << args[2] << "\n";
+    else if (flag == "-r") {
+        if (args.size() < 3){
+            displayScreenHelp();
+            return;
+        }
+        const std::string& procName = args[2];
+        auto proc = scheduler->findProcess(procName);
+        if (!proc) {
+            std::cout << "Process " << procName << " not found.\n";
+            return;
+        }
+        attachProcessScreen(proc);
     }
     else {
         displayScreenHelp();

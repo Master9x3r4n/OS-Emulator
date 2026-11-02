@@ -4,7 +4,6 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
-#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -187,10 +186,9 @@ public:
     // =========================================================================
     // Logging & In-Memory Buffer
     // =========================================================================
-    void enableFileLogging(const std::string& dir);
 
-    // Formats: <process_name> | (<DATE-TIME>) | Core: <CORE> <curr_line>/<total_lines>
-    std::string generateLogLine(int core, std::chrono::system_clock::time_point tp = std::chrono::system_clock::now()) const;
+    // Formats: <process_name> | <MESSAGE> | (<DATE-TIME>) | Core: <CORE> <curr_line>/<total_lines>
+    std::string generateLogLine(int core, const std::string& message = "", std::chrono::system_clock::time_point tp = std::chrono::system_clock::now()) const;
 
     void appendLog(const std::string& logLine);
     void addLog(const std::string& logLine) { appendLog(logLine); }
@@ -218,6 +216,10 @@ public:
 
     static std::vector<Instruction> generateRandomInstructions(
         uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t maxDepth = 3);
+    
+    // State Accessors
+    bool isAttached() const { return isAttached_.load(); }
+    void setAttached(bool attached) { isAttached_.store(attached); }
 
 private:
     struct LoopFrame {
@@ -259,7 +261,5 @@ private:
 
     std::vector<LoopFrame> loopStack_;
 
-    bool fileLoggingEnabled_ = false;
-    std::string logPath_;
-    std::ofstream logFile_;
+    std::atomic<bool> isAttached_{false};
 };

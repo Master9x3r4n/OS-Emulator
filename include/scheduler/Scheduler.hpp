@@ -51,6 +51,9 @@ public:
 
     Snapshot snapshot() const;
 
+    // Look up any process (like legitimately any type)
+    std::shared_ptr<Process> findProcess(const std::string& name) const;
+
 private:
     void schedulerLoop();
     void workerLoop(uint32_t core);

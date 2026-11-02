@@ -13,8 +13,6 @@ Scheduler::Scheduler(const Config& config, std::string logDir,
       minIns_(config.minIns),
       maxIns_(config.maxIns),
       tickDuration_(tickDuration),
-      logDir_(std::move(logDir)),
-      loggingEnabled_(SchedulerSettings::kEnablePrintFileLogging),
       slots_(numCores_),
       quantumUsed_(numCores_, 0)
 {
@@ -32,18 +30,6 @@ bool Scheduler::start()
         if (running_)
             return true;
         running_ = true;
-    }
-
-    if (loggingEnabled_)
-    {
-        std::error_code ec;
-        std::filesystem::create_directories(logDir_, ec);
-        if (ec)
-        {
-            std::cerr << "Warning: could not create log directory '" << logDir_
-                      << "' (" << ec.message() << "); print logging disabled.\n";
-            loggingEnabled_ = false;
-        }
     }
 
     try
@@ -130,9 +116,6 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
     {
         p = std::make_shared<Process>(nextId_++, finalName, minIns_, maxIns_);
     }
-
-    if (loggingEnabled_)
-        p->enableFileLogging(logDir_);
 
     ready_.push_back(p);
     return p;
@@ -318,4 +301,26 @@ Scheduler::Snapshot Scheduler::snapshot() const
         s.finished.push_back(describeLocked(*p));
 
     return s;
+}
+
+
+// Look up any process
+std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
+{
+    std::string searchName = name;
+    if (searchName.length() > Process::kMaxNameLength)
+    {
+        searchName = searchName.substr(0, Process::kMaxNameLength);
+    }
+
+    std::lock_guard<std::mutex> lk(mtx_);
+    for (const auto& p : slots_)
+        if (p && p->name() == searchName) return p;
+    for (const auto& p : ready_)
+        if (p && p->name() == searchName) return p;
+    for (const auto& p : waiting_)
+        if (p && p->name() == searchName) return p;
+    for (const auto& p : finished_)
+        if (p && p->name() == searchName) return p;
+    return nullptr;
 }
