@@ -219,7 +219,7 @@ public:
     void executeNext(uint32_t core, uint64_t delayPerExec);
 
     static std::vector<Instruction> generateRandomInstructions(
-        uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t maxDepth = 0);
+        uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t currentDepth = 0);
     
     // State Accessors
     bool isAttached() const { return isAttached_.load(); }

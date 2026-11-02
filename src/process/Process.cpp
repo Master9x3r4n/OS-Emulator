@@ -476,26 +476,32 @@ std::vector<Instruction> Process::generateRandomInstructions(
     const uint64_t low = std::max<uint64_t>(1ULL, minIns);
     const uint64_t high = std::max<uint64_t>(low, maxIns);
     std::uniform_int_distribution<unsigned long long> countDist(low, high);
-    const uint64_t totalCount = countDist(rng);
+    const uint64_t targetCount = countDist(rng);
 
     const std::vector<std::string> varPool = {"x", "y", "z", "count"};
     std::uniform_int_distribution<int> varDist(0, static_cast<int>(varPool.size() - 1));
-    // If currentDepth >= 3, do not allow FOR (case 5)
-    std::uniform_int_distribution<int> typeDist(0, (currentDepth < kMaxLoopDepth) ? 5 : 4);
     std::uniform_int_distribution<uint16_t> valDist(1, 100);
     std::uniform_int_distribution<int> boolDist(0, 1);
     std::uniform_int_distribution<int> sleepDist(1, 5);
 
     std::vector<Instruction> result;
-    result.reserve(static_cast<size_t>(totalCount));
+    uint64_t remaining = targetCount;
 
-    if (currentDepth == 0) {
+    // At top level (depth 0), seed with an initial declaration so variables always exist
+    if (currentDepth == 0 && remaining > 0)
+    {
         result.push_back(Instruction::makeDeclare(varPool[0], valDist(rng)));
+        --remaining;
     }
 
-    for (uint64_t i = (currentDepth== 0 ? 1 : 0); i < totalCount; ++i)
+    while (remaining > 0)
     {
+        // A FOR loop requires at least 2 remaining instruction executions
+        // and nesting depth must be strictly below kMaxLoopDepth (3)
+        const bool canMakeFor = (currentDepth < kMaxLoopDepth) && (remaining >= 2);
+        std::uniform_int_distribution<int> typeDist(0, canMakeFor ? 5 : 4);
         const int choice = typeDist(rng);
+
         switch (choice)
         {
         case 0: { // PRINT
@@ -508,11 +514,13 @@ std::vector<Instruction> Process::generateRandomInstructions(
                 const std::string& v = varPool[varDist(rng)];
                 result.push_back(Instruction::makePrint("Value of " + v + ": ", v));
             }
+            --remaining;
             break;
         }
         case 1: { // DECLARE
             const std::string& v = varPool[varDist(rng)];
             result.push_back(Instruction::makeDeclare(v, valDist(rng)));
+            --remaining;
             break;
         }
         case 2: { // ADD
@@ -522,6 +530,7 @@ std::vector<Instruction> Process::generateRandomInstructions(
             Operand op2 = (boolDist(rng) == 0) ? Operand::fromVariable(varPool[varDist(rng)])
                                                : Operand::fromValue(valDist(rng));
             result.push_back(Instruction::makeAdd(dest, op1, op2));
+            --remaining;
             break;
         }
         case 3: { // SUBTRACT
@@ -531,19 +540,32 @@ std::vector<Instruction> Process::generateRandomInstructions(
             Operand op2 = (boolDist(rng) == 0) ? Operand::fromVariable(varPool[varDist(rng)])
                                                : Operand::fromValue(valDist(rng));
             result.push_back(Instruction::makeSubtract(dest, op1, op2));
+            --remaining;
             break;
         }
         case 4: { // SLEEP
             result.push_back(Instruction::makeSleep(static_cast<uint8_t>(sleepDist(rng))));
+            --remaining;
             break;
         }
         case 5: { // FOR
-            if (currentDepth < kMaxLoopDepth)
-            {
-                std::vector<Instruction> loopBody = generateRandomInstructions(1, 3, procName, currentDepth + 1);
-                std::uniform_int_distribution<uint32_t> repeatDist(1, 3);
-                result.push_back(Instruction::makeFor(std::move(loopBody), repeatDist(rng)));
-            }
+            // Repeats in [2, min(3, remaining)]
+            const uint64_t maxRepeats = std::min<uint64_t>(3ULL, remaining);
+            std::uniform_int_distribution<uint64_t> repeatDist(2ULL, maxRepeats);
+            const uint64_t repeats = repeatDist(rng);
+
+            // Maximum instructions in body such that (repeats * bodyBudget <= remaining)
+            const uint64_t maxAllowedBudget = remaining / repeats;
+            const uint64_t maxBodyBudget = std::min<uint64_t>(8ULL, maxAllowedBudget);
+            const uint64_t minBodyBudget = (maxBodyBudget >= 2) ? 2ULL : 1ULL;
+
+            std::uniform_int_distribution<uint64_t> bodyBudgetDist(minBodyBudget, maxBodyBudget);
+            const uint64_t bodyBudget = bodyBudgetDist(rng);
+
+            std::vector<Instruction> loopBody = generateRandomInstructions(bodyBudget, bodyBudget, procName, currentDepth + 1);
+            result.push_back(Instruction::makeFor(std::move(loopBody), static_cast<uint32_t>(repeats)));
+
+            remaining -= (repeats * bodyBudget);
             break;
         }
         }
@@ -555,6 +577,7 @@ std::vector<Instruction> Process::generateRandomInstructions(
 // ---------------------------------------------------------------------------
 // Count Total Instructions
 // ---------------------------------------------------------------------------
+
 uint32_t Process::countTotalInstructions(const std::vector<Instruction>& insts, size_t currentDepth)
 {
     uint32_t total = 0;
