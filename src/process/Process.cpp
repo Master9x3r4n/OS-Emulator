@@ -28,6 +28,7 @@ Process::Process(uint32_t id, std::string name, uint32_t instructionCount)
 {
     const uint64_t count = (instructionCount == 0) ? 10 : instructionCount;
     instructions_ = generateRandomInstructions(count, count, name_);
+    totalInstructions_ = countTotalInstructions(instructions_);
 }
 
 Process::Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns)
@@ -36,6 +37,7 @@ Process::Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns
       createdAt_(formatTimestamp())
 {
     instructions_ = generateRandomInstructions(minIns, maxIns, name_);
+    totalInstructions_ = countTotalInstructions(instructions_);
 }
 
 Process::Process(uint32_t id, std::string name, std::vector<Instruction> instructions)
@@ -48,6 +50,7 @@ Process::Process(uint32_t id, std::string name, std::vector<Instruction> instruc
     {
         instructions_.push_back(Instruction::makePrint());
     }
+    totalInstructions_ = countTotalInstructions(instructions_);
 }
 
 Process::~Process() = default;
@@ -219,7 +222,7 @@ const Instruction* Process::fetchInstruction() const
             return &top.instructions->at(top.pc);
         return nullptr;
     }
-    return fetch(executed_.load());
+    return fetch(static_cast<uint32_t>(pc_));
 }
 
 DecodedInstruction Process::decodeInstruction(const Instruction& inst)
@@ -328,6 +331,11 @@ void Process::handleSleep(const DecodedInstruction& decoded, const ExecutionCont
 
 void Process::handleFor(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
 {
+    // Reject 4th nesting level
+    if (loopStack_.size() >= kMaxLoopDepth) {
+        return;
+    }
+
     if (decoded.forBody && !decoded.forBody->empty() && decoded.forRepeats > 0)
     {
         LoopFrame frame;
@@ -363,7 +371,7 @@ void Process::advanceInstructionPointer()
     }
     else
     {
-        executed_.fetch_add(1);
+        ++pc_;
     }
 }
 
@@ -372,31 +380,60 @@ bool Process::step(uint32_t core)
     if (isFinished())
         return false;
 
-    const Instruction* inst = fetchInstruction();
-    if (!inst)
+    // Drain empty / completed loops or handle FOR headers without consuming worker ticks
+    while (true)
     {
-        state_.store(ProcessState::Finished);
-        return false;
-    }
+        if (loopStack_.empty() && pc_ >= instructions_.size())
+        {
+            state_.store(ProcessState::Finished);
+            return false;
+        }
 
-    ExecutionContext ctx{*this, core, std::chrono::system_clock::now()};
-    const DecodedInstruction dec = decodeInstruction(*inst);
+        const Instruction* inst = fetchInstruction();
+        if (!inst)
+        {
+            state_.store(ProcessState::Finished);
+            return false;
+        }
 
-    const size_t depthBefore = loopStack_.size();
-    executeInstruction(dec, ctx);
+        if (inst->type == InstructionType::For)
+        {
+            const size_t depthBefore = loopStack_.size();
+            DecodedInstruction dec = decodeInstruction(*inst);
 
-    // Skip advancing when a new loop frame was just pushed so body[0] executes first
-    if (loopStack_.size() <= depthBefore)
-    {
+            // Only enter the loop if within the 3-level depth limit and repeats > 0
+            if (depthBefore < kMaxLoopDepth && dec.forRepeats > 0 && dec.forBody && !dec.forBody->empty())
+            {
+                LoopFrame frame;
+                frame.instructions = dec.forBody;
+                frame.totalRepeats = dec.forRepeats;
+                frame.currentRepeat = 0;
+                frame.pc = 0;
+                loopStack_.push_back(frame);
+            }
+            else
+            {
+                // Skip the FOR instruction if repeats == 0, body is empty, or depth limit reached
+                advanceInstructionPointer();
+            }
+            continue;
+        }
+
+        // Standard instruction execution (PRINT, DECLARE, ADD, SUBTRACT, SLEEP)
+        ExecutionContext ctx{*this, core, std::chrono::system_clock::now()};
+        const DecodedInstruction dec = decodeInstruction(*inst);
+
+        executeInstruction(dec, ctx);
+        executed_.fetch_add(1);
         advanceInstructionPointer();
-    }
 
-    if (loopStack_.empty() && executed_.load() >= totalInstructions())
-    {
-        state_.store(ProcessState::Finished);
-    }
+        if (loopStack_.empty() && pc_ >= instructions_.size())
+        {
+            state_.store(ProcessState::Finished);
+        }
 
-    return true;
+        return true;
+    }
 }
 
 void Process::executeNext(uint32_t core, uint64_t delayPerExec)
@@ -432,7 +469,7 @@ void Process::executeNext(uint32_t core, uint64_t delayPerExec)
 // ---------------------------------------------------------------------------
 
 std::vector<Instruction> Process::generateRandomInstructions(
-    uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t maxDepth)
+    uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t currentDepth)
 {
     static thread_local std::mt19937_64 rng(std::random_device{}());
 
@@ -443,7 +480,8 @@ std::vector<Instruction> Process::generateRandomInstructions(
 
     const std::vector<std::string> varPool = {"x", "y", "z", "count"};
     std::uniform_int_distribution<int> varDist(0, static_cast<int>(varPool.size() - 1));
-    std::uniform_int_distribution<int> typeDist(0, (maxDepth > 0) ? 5 : 4);
+    // If currentDepth >= 3, do not allow FOR (case 5)
+    std::uniform_int_distribution<int> typeDist(0, (currentDepth < kMaxLoopDepth) ? 5 : 4);
     std::uniform_int_distribution<uint16_t> valDist(1, 100);
     std::uniform_int_distribution<int> boolDist(0, 1);
     std::uniform_int_distribution<int> sleepDist(1, 5);
@@ -451,9 +489,11 @@ std::vector<Instruction> Process::generateRandomInstructions(
     std::vector<Instruction> result;
     result.reserve(static_cast<size_t>(totalCount));
 
-    result.push_back(Instruction::makeDeclare(varPool[0], valDist(rng)));
+    if (currentDepth == 0) {
+        result.push_back(Instruction::makeDeclare(varPool[0], valDist(rng)));
+    }
 
-    for (uint64_t i = 1; i < totalCount; ++i)
+    for (uint64_t i = (currentDepth== 0 ? 1 : 0); i < totalCount; ++i)
     {
         const int choice = typeDist(rng);
         switch (choice)
@@ -498,14 +538,41 @@ std::vector<Instruction> Process::generateRandomInstructions(
             break;
         }
         case 5: { // FOR
-            std::vector<Instruction> loopBody;
-            loopBody.push_back(Instruction::makeAdd(varPool[0], Operand::fromVariable(varPool[0]), Operand::fromValue(1)));
-            loopBody.push_back(Instruction::makePrint("Loop iteration in " + procName));
-            result.push_back(Instruction::makeFor(std::move(loopBody), 2));
+            if (currentDepth < kMaxLoopDepth)
+            {
+                std::vector<Instruction> loopBody = generateRandomInstructions(1, 3, procName, currentDepth + 1);
+                std::uniform_int_distribution<uint32_t> repeatDist(1, 3);
+                result.push_back(Instruction::makeFor(std::move(loopBody), repeatDist(rng)));
+            }
             break;
         }
         }
     }
 
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// Count Total Instructions
+// ---------------------------------------------------------------------------
+uint32_t Process::countTotalInstructions(const std::vector<Instruction>& insts, size_t currentDepth)
+{
+    uint32_t total = 0;
+    for (const auto& inst : insts)
+    {
+        if (inst.type == InstructionType::For)
+        {
+            if (currentDepth < kMaxLoopDepth && inst.repeats > 0)
+            {
+                uint32_t bodyCount = countTotalInstructions(inst.nestedInstructions, currentDepth + 1);
+                total += bodyCount * inst.repeats;
+            }
+            // 4th level or repeats == 0 contributes 0 executions
+        }
+        else
+        {
+            total += 1;
+        }
+    }
+    return total;
 }

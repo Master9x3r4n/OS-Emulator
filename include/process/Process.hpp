@@ -148,6 +148,7 @@ class Process {
 public:
     static constexpr size_t kMaxNameLength = 14;
     static constexpr size_t kDefaultMaxLogs = 1000;
+    static constexpr size_t kMaxLoopDepth = 3;
 
     Process(uint32_t id, std::string name = "", uint32_t instructionCount = 0);
     Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns);
@@ -157,11 +158,14 @@ public:
     uint32_t id() const { return id_; }
     const std::string& name() const { return name_; }
     const std::string& createdAt() const { return createdAt_; }
-    uint32_t totalInstructions() const { return static_cast<uint32_t>(instructions_.size()); }
+    uint32_t totalInstructions() const { return totalInstructions_; }
     uint32_t executedInstructions() const { return executed_.load(); }
     uint32_t currLine() const { return executed_.load(); }
-    bool isFinished() const { return state_.load() == ProcessState::Finished || executed_.load() >= totalInstructions(); }
+    bool isFinished() const { return state_.load() == ProcessState::Finished || executed_.load() >= totalInstructions_; }
     bool isWaiting() const { return state_.load() == ProcessState::Waiting; }
+
+    // Helper to calculate total instruction count expanding loops
+    static uint32_t countTotalInstructions(const std::vector<Instruction>& insts, size_t currentDepth = 0);
 
     ProcessState state() const { return state_.load(); }
     void setState(ProcessState s) { state_.store(s); }
@@ -215,7 +219,7 @@ public:
     void executeNext(uint32_t core, uint64_t delayPerExec);
 
     static std::vector<Instruction> generateRandomInstructions(
-        uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t maxDepth = 3);
+        uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t maxDepth = 0);
     
     // State Accessors
     bool isAttached() const { return isAttached_.load(); }
@@ -247,6 +251,9 @@ private:
     std::string startedAt_;
     std::vector<Instruction> instructions_;
 
+    uint32_t totalInstructions_ = 0;
+    size_t pc_ = 0; // top-level instruction pointer
+    
     std::atomic<uint32_t> executed_{0};
     std::atomic<ProcessState> state_{ProcessState::Ready};
     std::atomic<int> core_{-1};
