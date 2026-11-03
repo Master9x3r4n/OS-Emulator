@@ -109,23 +109,27 @@ void handleScreenCommand(const std::vector<std::string>& args) {
         GenerateReport(scheduler->snapshot());
     }
     else if (flag == "-s") {
-        std::string procName = (args.size() >= 3) ? args[2] : "";
-        auto p = scheduler->createProcess(procName);
+        if (args.size() < 3) {
+            displayScreenHelp();
+            return;
+        }
+        const std::string& procName = args[2];
+        std::string error;
+        auto p = scheduler->createProcess(procName, &error);
         if (p) {
-            std::cout << "Created process '" << p->name() << "' (ID: " << p->id()
-                      << ") with " << p->totalInstructions() << " instructions.\n";
+            attachProcessScreen(p);
         } else {
-            std::cout << "Error: Process creation failed (duplicate name or invalid).\n";
+            std::cout << "Error: " << error << "\n";
         }
     }
     else if (flag == "-r") {
-        if (args.size() < 3){
+        if (args.size() < 3) {
             displayScreenHelp();
             return;
         }
         const std::string& procName = args[2];
         auto proc = scheduler->findProcess(procName);
-        if (!proc) {
+        if (!proc || proc->isFinished()) {
             std::cout << "Process " << procName << " not found.\n";
             return;
         }

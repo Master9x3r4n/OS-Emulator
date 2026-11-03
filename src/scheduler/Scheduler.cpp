@@ -71,6 +71,7 @@ void Scheduler::joinAll()
 }
 
 std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
+                                                  std::string* error,
                                                   uint32_t instructionCount)
 {
     std::lock_guard<std::mutex> lk(mtx_);
@@ -79,21 +80,30 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
 
     if (!finalName.empty())
     {
-        // 1. Truncate user name to 14 chars max BEFORE checking uniqueness
+        // 1. Validate max length (must be <= 14 characters)
         if (finalName.length() > Process::kMaxNameLength)
         {
-            finalName = finalName.substr(0, Process::kMaxNameLength);
+            if (error)
+            {
+                *error = "Process name '" + finalName + "' exceeds maximum length of " +
+                         std::to_string(Process::kMaxNameLength) + " characters.";
+            }
+            return nullptr;
         }
 
-        // Check if the 14-char name already exists
+        // 2. Reject duplicates
         if (nameExistsLocked(finalName))
         {
+            if (error)
+            {
+                *error = "Process with name '" + finalName + "' already exists.";
+            }
             return nullptr;
         }
     }
     else
     {
-        // 2. Generate a name that is guaranteed NOT to collide with any user name
+        // Generate a unique auto-name: p01, p02, ...
         while (true)
         {
             char buf[16];
@@ -121,6 +131,12 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
     return p;
 }
 
+std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
+                                                  uint32_t instructionCount)
+{
+    return createProcess(name, nullptr, instructionCount);
+}
+
 bool Scheduler::nameExistsLocked(const std::string& name) const
 {
     for (const auto& p : ready_)
@@ -136,7 +152,6 @@ bool Scheduler::nameExistsLocked(const std::string& name) const
 
 
 // Scheduler thread (tick clock)
-
 void Scheduler::schedulerLoop()
 {
     std::unique_lock<std::mutex> lk(mtx_);
@@ -243,7 +258,6 @@ void Scheduler::collectLocked()
 }
 
 // Worker threads (one per core)
-
 void Scheduler::workerLoop(uint32_t core)
 {
     uint64_t seen = 0;
@@ -271,7 +285,6 @@ void Scheduler::workerLoop(uint32_t core)
 }
 
 // Snapshot
-
 Scheduler::ProcessInfo Scheduler::describeLocked(const Process& p) const
 {
     ProcessInfo info;
@@ -313,20 +326,19 @@ Scheduler::Snapshot Scheduler::snapshot() const
 // Look up any process
 std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
 {
-    std::string searchName = name;
-    if (searchName.length() > Process::kMaxNameLength)
+    if (name.empty() || name.length() > Process::kMaxNameLength)
     {
-        searchName = searchName.substr(0, Process::kMaxNameLength);
+        return nullptr;
     }
 
     std::lock_guard<std::mutex> lk(mtx_);
     for (const auto& p : slots_)
-        if (p && p->name() == searchName) return p;
+        if (p && p->name() == name) return p;
     for (const auto& p : ready_)
-        if (p && p->name() == searchName) return p;
+        if (p && p->name() == name) return p;
     for (const auto& p : waiting_)
-        if (p && p->name() == searchName) return p;
+        if (p && p->name() == name) return p;
     for (const auto& p : finished_)
-        if (p && p->name() == searchName) return p;
+        if (p && p->name() == name) return p;
     return nullptr;
 }

@@ -45,13 +45,20 @@ public:
     bool start();
     void stop();
 
-    // Creates a process; if name is empty, generates an auto-name (p01, p02...)
+    /* createProcess */
+    /*  Creates a process; if name is empty, generates an auto-name (p01, p02...)
+        If error is provided, writes reason on failure. */
     std::shared_ptr<Process> createProcess(const std::string& name = "",
+                                           std::string* error = nullptr,
                                            uint32_t instructionCount = 0);
+
+    // Overload when instruction count is explicitly specified
+    std::shared_ptr<Process> createProcess(const std::string& name,
+                                           uint32_t instructionCount);
 
     Snapshot snapshot() const;
 
-    // Look up any process (like legitimately any type)
+    // Look up any process (like legitimately any type) <- this is how i know this was human made code
     std::shared_ptr<Process> findProcess(const std::string& name) const;
 
 private:
