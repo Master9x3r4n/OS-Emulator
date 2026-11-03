@@ -10,9 +10,9 @@ Scheduler::Scheduler(const Config& config, std::string logDir,
       numCores_(static_cast<uint32_t>(config.numCpu)),
       quantumCycles_(config.quantumCycles),
       delayPerExec_(config.delayPerExec),
+      minIns_(config.minIns),
+      maxIns_(config.maxIns),
       tickDuration_(tickDuration),
-      logDir_(std::move(logDir)),
-      loggingEnabled_(SchedulerSettings::kEnablePrintFileLogging),
       slots_(numCores_),
       quantumUsed_(numCores_, 0)
 {
@@ -30,18 +30,6 @@ bool Scheduler::start()
         if (running_)
             return true;
         running_ = true;
-    }
-
-    if (loggingEnabled_)
-    {
-        std::error_code ec;
-        std::filesystem::create_directories(logDir_, ec);
-        if (ec)
-        {
-            std::cerr << "Warning: could not create log directory '" << logDir_
-                      << "' (" << ec.message() << "); print logging disabled.\n";
-            loggingEnabled_ = false;
-        }
     }
 
     try
@@ -86,12 +74,49 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
                                                   uint32_t instructionCount)
 {
     std::lock_guard<std::mutex> lk(mtx_);
-    if (nameExistsLocked(name))
-        return nullptr;
 
-    auto p = std::make_shared<Process>(nextId_++, name, instructionCount);
-    if (loggingEnabled_)
-        p->enableFileLogging(logDir_);
+    std::string finalName = name;
+
+    if (!finalName.empty())
+    {
+        // 1. Truncate user name to 14 chars max BEFORE checking uniqueness
+        if (finalName.length() > Process::kMaxNameLength)
+        {
+            finalName = finalName.substr(0, Process::kMaxNameLength);
+        }
+
+        // Check if the 14-char name already exists
+        if (nameExistsLocked(finalName))
+        {
+            return nullptr;
+        }
+    }
+    else
+    {
+        // 2. Generate a name that is guaranteed NOT to collide with any user name
+        while (true)
+        {
+            char buf[16];
+            std::snprintf(buf, sizeof(buf), "p%02u", nextAutoNameId_++);
+            std::string candidate(buf);
+            if (!nameExistsLocked(candidate))
+            {
+                finalName = candidate;
+                break;
+            }
+        }
+    }
+
+    std::shared_ptr<Process> p;
+    if (instructionCount > 0)
+    {
+        p = std::make_shared<Process>(nextId_++, finalName, instructionCount);
+    }
+    else
+    {
+        p = std::make_shared<Process>(nextId_++, finalName, minIns_, maxIns_);
+    }
+
     ready_.push_back(p);
     return p;
 }
@@ -101,6 +126,8 @@ bool Scheduler::nameExistsLocked(const std::string& name) const
     for (const auto& p : ready_)
         if (p->name() == name) return true;
     for (const auto& p : slots_)
+        if (p && p->name() == name) return true;
+    for (const auto& p : waiting_)
         if (p && p->name() == name) return true;
     for (const auto& p : finished_)
         if (p->name() == name) return true;
@@ -156,6 +183,22 @@ void Scheduler::dispatchLocked()
 // processes whose quantum expired. FCFS never preempts.
 void Scheduler::collectLocked()
 {
+    // 1. Tick sleeping processes; when awake, return to ready queue
+    for (auto it = waiting_.begin(); it != waiting_.end(); )
+    {
+        (*it)->tickSleep();
+        if ((*it)->state() == ProcessState::Ready)
+        {
+            ready_.push_back(std::move(*it));
+            it = waiting_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // 2. Collect finished or waiting processes from CPU slots
     for (uint32_t c = 0; c < numCores_; ++c)
     {
         std::shared_ptr<Process>& p = slots_[c];
@@ -169,16 +212,21 @@ void Scheduler::collectLocked()
             p.reset();
             quantumUsed_[c] = 0;
         }
+        else if (p->state() == ProcessState::Waiting)
+        {
+            // Process relinquished CPU due to SLEEP(X)
+            waiting_.push_back(std::move(p));
+            p.reset();
+            quantumUsed_[c] = 0;
+        }
         else if (policy_ == Policy::RoundRobin && quantumUsed_[c] >= quantumCycles_)
         {
             if (!ready_.empty())
             {
-                // Someone is waiting: go to the back of the queue.
                 p->setState(ProcessState::Ready);
                 ready_.push_back(std::move(p));
                 p.reset();
             }
-            // Nobody waiting: keep the core and start a fresh quantum.
             quantumUsed_[c] = 0;
         }
     }
@@ -253,4 +301,26 @@ Scheduler::Snapshot Scheduler::snapshot() const
         s.finished.push_back(describeLocked(*p));
 
     return s;
+}
+
+
+// Look up any process
+std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
+{
+    std::string searchName = name;
+    if (searchName.length() > Process::kMaxNameLength)
+    {
+        searchName = searchName.substr(0, Process::kMaxNameLength);
+    }
+
+    std::lock_guard<std::mutex> lk(mtx_);
+    for (const auto& p : slots_)
+        if (p && p->name() == searchName) return p;
+    for (const auto& p : ready_)
+        if (p && p->name() == searchName) return p;
+    for (const auto& p : waiting_)
+        if (p && p->name() == searchName) return p;
+    for (const auto& p : finished_)
+        if (p && p->name() == searchName) return p;
+    return nullptr;
 }

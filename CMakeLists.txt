@@ -17,7 +17,8 @@ set(SOURCE_FILES
     src/utils/Time.cpp
 )
 
-add_executable(OS_Emulator ${SOURCE_FILES})
+add_executable(OS_Emulator ${SOURCE_FILES}
+    include/process/SymbolTable.hpp)
 
 target_include_directories(OS_Emulator PRIVATE
     include

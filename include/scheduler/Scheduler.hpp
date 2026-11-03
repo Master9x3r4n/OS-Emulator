@@ -14,14 +14,6 @@
 #include <process/Process.hpp>
 #include <scheduler/SchedulerSettings.hpp>
 
-// Multi-threaded CPU scheduler: one scheduler thread plus one worker thread
-// per core. The scheduler thread acts as the tick clock. Every tick it
-//   1. dispatches ready processes onto idle cores,
-//   2. waits one wall-clock tick duration,
-//   3. releases all workers to run exactly one tick of work,
-//   4. waits for every worker to finish the tick, then
-//   5. retires finished processes and (round robin) preempts expired quanta.
-// Workers never touch stdout; only the caller's thread prints.
 class Scheduler {
 public:
     enum class Policy { FCFS, RoundRobin };
@@ -34,14 +26,13 @@ public:
         uint32_t total = 0;
     };
 
-    // A point-in-time view used by "screen -ls" and "report-util".
     struct Snapshot {
         uint64_t cpuCycles = 0;
         uint32_t totalCores = 0;
         uint32_t coresUsed = 0;
-        double utilization = 0.0; // percent
-        std::vector<ProcessInfo> running;  // ordered by core
-        std::vector<ProcessInfo> finished; // in order of completion
+        double utilization = 0.0;
+        std::vector<ProcessInfo> running;
+        std::vector<ProcessInfo> finished;
     };
 
     Scheduler(const Config& config, std::string logDir,
@@ -51,17 +42,17 @@ public:
     Scheduler(const Scheduler&) = delete;
     Scheduler& operator=(const Scheduler&) = delete;
 
-    // Spawns the scheduler and worker threads. Returns false on failure.
     bool start();
-    // Signals shutdown and joins every thread. Safe to call more than once.
     void stop();
 
-    // Creates a process and puts it at the back of the ready queue.
-    // Returns nullptr if a process with that name already exists.
-    std::shared_ptr<Process> createProcess(const std::string& name,
-                                           uint32_t instructionCount);
+    // Creates a process; if name is empty, generates an auto-name (p01, p02...)
+    std::shared_ptr<Process> createProcess(const std::string& name = "",
+                                           uint32_t instructionCount = 0);
 
     Snapshot snapshot() const;
+
+    // Look up any process (like legitimately any type)
+    std::shared_ptr<Process> findProcess(const std::string& name) const;
 
 private:
     void schedulerLoop();
@@ -72,32 +63,33 @@ private:
     void joinAll();
     ProcessInfo describeLocked(const Process& p) const;
 
-    // Configuration (immutable after construction, except loggingEnabled_ which
-    // is only changed in start() before any thread runs).
+    // Configuration
     Policy policy_;
     uint32_t numCores_;
     uint64_t quantumCycles_;
     uint64_t delayPerExec_;
+    uint64_t minIns_ = 1000;          // <-- Added
+    uint64_t maxIns_ = 2000;          // <-- Added
     std::chrono::milliseconds tickDuration_;
     std::string logDir_;
     bool loggingEnabled_;
 
-    // Everything below is guarded by mtx_ (quantumUsed_ elements are written by
-    // their own worker during a tick, which is safe because the scheduler
-    // thread only touches them between ticks).
+    // Thread synchronization & state
     mutable std::mutex mtx_;
-    std::condition_variable cvTick_;  // scheduler -> workers: a tick begins
-    std::condition_variable cvDone_;  // workers -> scheduler: tick finished
-    std::condition_variable cvSleep_; // interruptible wait between ticks
+    std::condition_variable cvTick_;
+    std::condition_variable cvDone_;
+    std::condition_variable cvSleep_;
     bool running_ = false;
     uint64_t generation_ = 0;
     uint32_t pending_ = 0;
     uint64_t cpuCycles_ = 0;
     uint32_t nextId_ = 1;
+    uint32_t nextAutoNameId_ = 1;     // <-- Added
 
     std::deque<std::shared_ptr<Process>> ready_;
-    std::vector<std::shared_ptr<Process>> slots_; // one per core
+    std::vector<std::shared_ptr<Process>> slots_;
     std::vector<uint64_t> quantumUsed_;
+    std::vector<std::shared_ptr<Process>> waiting_;  // <-- Added for SLEEP(X)
     std::vector<std::shared_ptr<Process>> finished_;
 
     std::thread schedulerThread_;
