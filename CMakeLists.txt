@@ -10,6 +10,9 @@ set(SOURCE_FILES
     src/main.cpp
     src/config/Config.cpp
     src/process/Process.cpp
+    src/process/Instruction.cpp
+    src/process/InstructionGenerator.cpp
+    src/process/ProcessLogBuffer.cpp
     src/scheduler/Scheduler.cpp
     src/utils/Display.cpp
     src/utils/Input.cpp
