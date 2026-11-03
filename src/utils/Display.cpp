@@ -14,7 +14,7 @@ void displayConsole()
               << "   Claro, Stephen\n"
               << "   Infante, Gabriel\n"
               << "   Omandac, Karl\n"
-              << "   Placer, John\n\n";
+              << "   Placer, Paul\n\n";
     std::cout << "Version Date: v9.15.26\n";
     std::cout << "---------------------------------------------------------------------------\n";
 }

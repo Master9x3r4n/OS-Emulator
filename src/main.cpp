@@ -50,11 +50,10 @@ struct Command {
 
 void renderProcessScreen(const std::shared_ptr<Process>& proc)
 {
-    clearScreen();
     std::cout << "Process: " << proc->name() << "\n"
-              << "ID: " << proc->id() << "\n\n";
-
+              << "ID: " << proc->id() << "\n";
     std::cout << "Logs:\n";
+
     const auto logs = proc->getLogs();
     for (const auto& line : logs) {
         std::cout << line << "\n";
@@ -62,17 +61,19 @@ void renderProcessScreen(const std::shared_ptr<Process>& proc)
 
     std::cout << "\n";
 
-    std::cout << "Current instruction: " << proc->executedInstructions() << "\n"
-              << "Lines of code: " << proc->totalInstructions() << "\n\n";
-
-    if (proc->isFinished()) {
-        std::cout << "\nFinished!\n";
+    if (!proc->isFinished()) {
+        std::cout << "Current instruction: " << proc->executedInstructions() << "\n"
+                  << "Lines of code: " << proc->totalInstructions() << "\n\n";
+    }
+    else {
+        std::cout << "Finished!\n\n";
     }
 }
 
 void attachProcessScreen(const std::shared_ptr<Process>& proc)
 {
     proc->setAttached(true);
+    clearScreen();
     renderProcessScreen(proc);
 
     while (true) {
