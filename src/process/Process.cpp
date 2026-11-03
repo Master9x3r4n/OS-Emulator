@@ -304,7 +304,7 @@ void Process::executeInstruction(const DecodedInstruction& decoded, const Execut
 
 void Process::handlePrint(const DecodedInstruction& decoded, const ExecutionContext& ctx)
 {
-    // Appends the required format: <process_name> | (<DATE-TIME>) | Core: <CORE> <curr_line>/<total_lines>
+    // Appends the required format: <process_name> (<date-time>) Core: <core> <msg>
     const std::string line = generateLogLine(ctx.core, decoded.printOutput, ctx.timestamp);
     appendLog(line);
 }

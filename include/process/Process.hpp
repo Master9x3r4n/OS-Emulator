@@ -191,7 +191,7 @@ public:
     // Logging & In-Memory Buffer
     // =========================================================================
 
-    // Formats: <process_name> | <MESSAGE> | (<DATE-TIME>) | Core: <CORE> <curr_line>/<total_lines>
+    // Formats: <process_name> (<date-time>) Core: <core> <msg>
     std::string generateLogLine(int core, const std::string& message = "", std::chrono::system_clock::time_point tp = std::chrono::system_clock::now()) const;
 
     void appendLog(const std::string& logLine);
