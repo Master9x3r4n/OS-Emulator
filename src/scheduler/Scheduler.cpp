@@ -134,9 +134,8 @@ bool Scheduler::nameExistsLocked(const std::string& name) const
     return false;
 }
 
-// ---------------------------------------------------------------------------
+
 // Scheduler thread (tick clock)
-// ---------------------------------------------------------------------------
 
 void Scheduler::schedulerLoop()
 {
@@ -183,7 +182,7 @@ void Scheduler::dispatchLocked()
 // processes whose quantum expired. FCFS never preempts.
 void Scheduler::collectLocked()
 {
-    // 1. Tick sleeping processes; when awake, return to ready queue
+    // 1. Tick sleeping processes; when awake, return to ready queue in FIFO order
     for (auto it = waiting_.begin(); it != waiting_.end(); )
     {
         (*it)->tickSleep();
@@ -207,6 +206,7 @@ void Scheduler::collectLocked()
 
         if (p->isFinished())
         {
+            p->setCore(-1);
             p->setState(ProcessState::Finished);
             finished_.push_back(std::move(p));
             p.reset();
@@ -215,7 +215,16 @@ void Scheduler::collectLocked()
         else if (p->state() == ProcessState::Waiting)
         {
             // Process relinquished CPU due to SLEEP(X)
-            waiting_.push_back(std::move(p));
+            p->setCore(-1);
+            if (p->sleepTicksRemaining() == 0)
+            {
+                p->setState(ProcessState::Ready);
+                ready_.push_back(std::move(p));
+            }
+            else
+            {
+                waiting_.push_back(std::move(p));
+            }
             p.reset();
             quantumUsed_[c] = 0;
         }
@@ -223,6 +232,7 @@ void Scheduler::collectLocked()
         {
             if (!ready_.empty())
             {
+                p->setCore(-1);
                 p->setState(ProcessState::Ready);
                 ready_.push_back(std::move(p));
                 p.reset();
@@ -232,9 +242,7 @@ void Scheduler::collectLocked()
     }
 }
 
-// ---------------------------------------------------------------------------
 // Worker threads (one per core)
-// ---------------------------------------------------------------------------
 
 void Scheduler::workerLoop(uint32_t core)
 {
@@ -262,9 +270,7 @@ void Scheduler::workerLoop(uint32_t core)
     }
 }
 
-// ---------------------------------------------------------------------------
 // Snapshot
-// ---------------------------------------------------------------------------
 
 Scheduler::ProcessInfo Scheduler::describeLocked(const Process& p) const
 {

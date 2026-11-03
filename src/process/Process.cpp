@@ -63,10 +63,7 @@ void Process::markRunning(int core)
         startedAt_ = formatTimestamp();
 }
 
-// ---------------------------------------------------------------------------
 // Memory / Symbol Table (uint16 clamped between [0, 65535])
-// ---------------------------------------------------------------------------
-
 void Process::declareVariable(const std::string& var, int64_t value)
 {
     symbolTable_.declare(var, value);
@@ -109,9 +106,7 @@ uint16_t Process::resolveOperand(const Operand& op)
     return SymbolTable::clamp(op.literalValue);
 }
 
-// ---------------------------------------------------------------------------
 // In-Memory Log Buffer & Formatting
-// ---------------------------------------------------------------------------
 
 std::string Process::generateLogLine(int core, const std::string& message, std::chrono::system_clock::time_point tp) const
 {
@@ -170,13 +165,11 @@ void Process::setMaxLogCapacity(size_t cap)
     }
 }
 
-// ---------------------------------------------------------------------------
 // Sleep Management
-// ---------------------------------------------------------------------------
 
 void Process::putToSleep(uint8_t ticks)
 {
-    sleepTicksRemaining_ = ticks;
+    sleepTicksRemaining_.store(ticks);
     state_.store(ProcessState::Waiting);
 }
 
@@ -185,10 +178,10 @@ void Process::tickSleep()
     if (state_.load() != ProcessState::Waiting)
         return;
 
-    if (sleepTicksRemaining_ > 0)
+    uint32_t current = sleepTicksRemaining_.load();
+    if (current > 0)
     {
-        --sleepTicksRemaining_;
-        if (sleepTicksRemaining_ == 0)
+        if (sleepTicksRemaining_.fetch_sub(1) == 1)
         {
             state_.store(ProcessState::Ready);
         }
@@ -199,9 +192,7 @@ void Process::tickSleep()
     }
 }
 
-// ---------------------------------------------------------------------------
-// Pipeline: Fetch, Decode, Execute
-// ---------------------------------------------------------------------------
+// Fetch, Decode, Execute pipeline
 
 const Instruction* Process::fetch(uint32_t line) const
 {
@@ -295,9 +286,7 @@ void Process::executeInstruction(const DecodedInstruction& decoded, const Execut
     }
 }
 
-// ---------------------------------------------------------------------------
 // Handlers
-// ---------------------------------------------------------------------------
 
 void Process::handlePrint(const DecodedInstruction& decoded, const ExecutionContext& ctx)
 {
@@ -401,7 +390,7 @@ bool Process::step(uint32_t core)
         const DecodedInstruction dec = decodeInstruction(*inst);
         executeInstruction(dec, ctx);
 
-        // FOR only enters or skips a loop: it is not a line of code, so it costs no tick.
+        // FOR only enters or skips a loop
         if (dec.type == InstructionType::For)
             continue;
 
@@ -425,9 +414,9 @@ void Process::executeNext(uint32_t core, uint64_t delayPerExec)
         return;
     }
 
+    // Process is waiting (should not execute on CPU)
     if (state_.load() == ProcessState::Waiting)
     {
-        tickSleep();
         return;
     }
 
@@ -445,9 +434,7 @@ void Process::executeNext(uint32_t core, uint64_t delayPerExec)
     }
 }
 
-// ---------------------------------------------------------------------------
 // Random Instruction Generator
-// ---------------------------------------------------------------------------
 
 std::vector<Instruction> Process::generateRandomInstructions(
     uint64_t minIns, uint64_t maxIns, const std::string& procName, uint32_t currentDepth)
@@ -555,9 +542,7 @@ std::vector<Instruction> Process::generateRandomInstructions(
     return result;
 }
 
-// ---------------------------------------------------------------------------
 // Count Total Instructions
-// ---------------------------------------------------------------------------
 
 uint32_t Process::countTotalInstructions(const std::vector<Instruction>& insts, size_t currentDepth)
 {

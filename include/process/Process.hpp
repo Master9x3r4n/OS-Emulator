@@ -225,6 +225,10 @@ public:
     bool isAttached() const { return isAttached_.load(); }
     void setAttached(bool attached) { isAttached_.store(attached); }
 
+    // sleep ticks getter and core setters
+    uint32_t sleepTicksRemaining() const { return sleepTicksRemaining_.load(); }
+    void setCore(int core) { core_.store(core); }
+
 private:
     struct LoopFrame {
         const std::vector<Instruction>* instructions = nullptr;
@@ -258,7 +262,7 @@ private:
     std::atomic<ProcessState> state_{ProcessState::Ready};
     std::atomic<int> core_{-1};
     uint64_t delayRemaining_ = 0;
-    uint32_t sleepTicksRemaining_ = 0;
+    std::atomic<uint32_t> sleepTicksRemaining_{0};
 
     SymbolTable symbolTable_;
 
