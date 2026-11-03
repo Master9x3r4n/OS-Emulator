@@ -156,13 +156,19 @@ int main() {
         {"report-util",     {true,  [](const auto&)  {
             GenerateReport(scheduler->snapshot(), true);
         }}},
-        {"scheduler-start", {true,  [](const auto&)  { 
-            /* TODO 2: call coresponding thread module to generate dummy processes */  
-            std::cout << "scheduler-start command recognized. Doing something.\n";
+        {"scheduler-start", {true, [](const auto&) {
+            if (scheduler->startGenerator()) {
+                std::cout << "Scheduler generation started.\n";
+            } else {
+                std::cout << "Scheduler generation is already running.\n";
+            }
         }}},
-        {"scheduler-stop",  {true,  [](const auto&)  { 
-            /* TODO 2: call coresponding thread module to stop generating dummy processes */ 
-            std::cout << "scheduler-stop command recognized. Doing something.\n"; 
+        {"scheduler-stop", {true, [](const auto&) {
+            if (scheduler->stopGenerator()) {
+                std::cout << "Scheduler generation stopped.\n";
+            } else {
+                std::cout << "Scheduler generation is not running.\n";
+            }
         }}},
         {"screen",          {true,  handleScreenCommand}}
     };

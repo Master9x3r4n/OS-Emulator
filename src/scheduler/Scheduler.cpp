@@ -1,6 +1,5 @@
 #include <scheduler/Scheduler.hpp>
 
-#include <filesystem>
 #include <iostream>
 #include <system_error>
 
@@ -9,6 +8,7 @@ Scheduler::Scheduler(const Config& config, std::string logDir,
     : policy_(config.scheduler == "rr" ? Policy::RoundRobin : Policy::FCFS),
       numCores_(static_cast<uint32_t>(config.numCpu)),
       quantumCycles_(config.quantumCycles),
+      batchProcessFreq_(config.batchProcessFreq),
       delayPerExec_(config.delayPerExec),
       minIns_(config.minIns),
       maxIns_(config.maxIns),
@@ -53,6 +53,7 @@ void Scheduler::stop()
     {
         std::lock_guard<std::mutex> lk(mtx_);
         running_ = false;
+        generating_ = false;
     }
     cvTick_.notify_all();
     cvDone_.notify_all();
@@ -70,18 +71,60 @@ void Scheduler::joinAll()
     workers_.clear();
 }
 
+
+// Generator Controls
+bool Scheduler::startGenerator()
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (generating_)
+    {
+        return false;
+    }
+    generating_ = true;
+    return true;
+}
+
+bool Scheduler::stopGenerator()
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (!generating_)
+    {
+        return false;
+    }
+    generating_ = false;
+    return true;
+}
+
+bool Scheduler::isGenerating() const
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    return generating_;
+}
+
+// Process Creation & Lookup
 std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
                                                   std::string* error,
                                                   uint32_t instructionCount)
 {
     std::lock_guard<std::mutex> lk(mtx_);
+    return createProcessLocked(name, error, instructionCount);
+}
 
+std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
+                                                  uint32_t instructionCount)
+{
+    return createProcess(name, nullptr, instructionCount);
+}
+
+std::shared_ptr<Process> Scheduler::createProcessLocked(const std::string& name,
+                                                        std::string* error,
+                                                        uint32_t instructionCount)
+{
     std::string finalName = name;
     const uint32_t procId = nextId_;
 
     if (!finalName.empty())
     {
-        // 1. Validate name length (<= 14 characters)
         if (finalName.length() > Process::kMaxNameLength)
         {
             if (error)
@@ -92,7 +135,6 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
             return nullptr;
         }
 
-        // 2. Reject duplicates
         if (nameExistsLocked(finalName))
         {
             if (error)
@@ -104,7 +146,6 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
     }
     else
     {
-        // Generate name: p<process_id>-<count>
         while (true)
         {
             std::string candidate = "p" + std::to_string(procId) + "-" + std::to_string(generatedCount_++);
@@ -121,7 +162,6 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
         }
     }
 
-    // Process is successfully created: increment ID
     ++nextId_;
 
     std::shared_ptr<Process> p;
@@ -138,12 +178,6 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
     return p;
 }
 
-std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
-                                                  uint32_t instructionCount)
-{
-    return createProcess(name, nullptr, instructionCount);
-}
-
 bool Scheduler::nameExistsLocked(const std::string& name) const
 {
     for (const auto& p : ready_)
@@ -157,21 +191,49 @@ bool Scheduler::nameExistsLocked(const std::string& name) const
     return false;
 }
 
+std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
+{
+    if (name.empty() || name.length() > Process::kMaxNameLength)
+    {
+        return nullptr;
+    }
 
-// Scheduler thread (tick clock)
+    std::lock_guard<std::mutex> lk(mtx_);
+    for (const auto& p : slots_)
+        if (p && p->name() == name) return p;
+    for (const auto& p : ready_)
+        if (p && p->name() == name) return p;
+    for (const auto& p : waiting_)
+        if (p && p->name() == name) return p;
+    for (const auto& p : finished_)
+        if (p && p->name() == name) return p;
+    return nullptr;
+}
+
+// Scheduler Loop & Synchronization
 void Scheduler::schedulerLoop()
 {
     std::unique_lock<std::mutex> lk(mtx_);
     while (running_)
     {
+        // 1. Generate batch dummy processes per tick if enabled
+        if (generating_)
+        {
+            for (uint64_t i = 0; i < batchProcessFreq_; ++i)
+            {
+                createProcessLocked();
+            }
+        }
+
+        // 2. Dispatch ready processes to idle cores
         dispatchLocked();
 
-        // One tick of wall-clock time; wakes early on shutdown.
+        // 3. Wall-clock tick duration (early wakeup on shutdown)
         cvSleep_.wait_for(lk, tickDuration_, [this] { return !running_; });
         if (!running_)
             break;
 
-        // Release every worker for exactly one tick and wait for all of them.
+        // 4. Release worker threads for 1 tick
         pending_ = numCores_;
         ++generation_;
         cvTick_.notify_all();
@@ -184,7 +246,6 @@ void Scheduler::schedulerLoop()
     }
 }
 
-// Fill idle cores from the front of the shared FIFO ready queue.
 void Scheduler::dispatchLocked()
 {
     for (uint32_t c = 0; c < numCores_; ++c)
@@ -200,11 +261,9 @@ void Scheduler::dispatchLocked()
     }
 }
 
-// After a tick: retire finished processes and, for round robin, rotate out
-// processes whose quantum expired. FCFS never preempts.
 void Scheduler::collectLocked()
 {
-    // 1. Tick sleeping processes; when awake, return to ready queue in FIFO order
+    // 1. Tick sleeping processes; when awake, return to ready queue
     for (auto it = waiting_.begin(); it != waiting_.end(); )
     {
         (*it)->tickSleep();
@@ -236,7 +295,6 @@ void Scheduler::collectLocked()
         }
         else if (p->state() == ProcessState::Waiting)
         {
-            // Process relinquished CPU due to SLEEP(X)
             p->setCore(-1);
             if (p->sleepTicksRemaining() == 0)
             {
@@ -264,7 +322,6 @@ void Scheduler::collectLocked()
     }
 }
 
-// Worker threads (one per core)
 void Scheduler::workerLoop(uint32_t core)
 {
     uint64_t seen = 0;
@@ -280,7 +337,6 @@ void Scheduler::workerLoop(uint32_t core)
         lk.unlock();
         if (proc)
         {
-            // This worker exclusively owns `proc` for the duration of the tick.
             proc->executeNext(core, delayPerExec_);
             ++quantumUsed_[core];
         }
@@ -327,25 +383,4 @@ Scheduler::Snapshot Scheduler::snapshot() const
         s.finished.push_back(describeLocked(*p));
 
     return s;
-}
-
-
-// Look up any process
-std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
-{
-    if (name.empty() || name.length() > Process::kMaxNameLength)
-    {
-        return nullptr;
-    }
-
-    std::lock_guard<std::mutex> lk(mtx_);
-    for (const auto& p : slots_)
-        if (p && p->name() == name) return p;
-    for (const auto& p : ready_)
-        if (p && p->name() == name) return p;
-    for (const auto& p : waiting_)
-        if (p && p->name() == name) return p;
-    for (const auto& p : finished_)
-        if (p && p->name() == name) return p;
-    return nullptr;
 }
