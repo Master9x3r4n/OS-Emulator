@@ -8,7 +8,7 @@ std::string Process::sanitizeOrGenerateName(uint32_t id, std::string name)
     if (name.empty())
     {
         char buf[16];
-        std::snprintf(buf, sizeof(buf), "p%02u", id);
+        std::snprintf(buf, sizeof(buf), "process%02u", id);
         return std::string(buf);
     }
     if (name.length() > kMaxNameLength)

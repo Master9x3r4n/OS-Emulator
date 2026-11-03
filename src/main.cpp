@@ -52,15 +52,18 @@ void renderProcessScreen(const std::shared_ptr<Process>& proc)
 {
     clearScreen();
     std::cout << "Process: " << proc->name() << "\n"
-              << "ID: " << proc->id() << "\n\n"
-              << "Current instruction: " << proc->executedInstructions() << "\n"
-              << "Lines of code: " << proc->totalInstructions() << "\n\n";
+              << "ID: " << proc->id() << "\n\n";
 
     std::cout << "Logs:\n";
     const auto logs = proc->getLogs();
     for (const auto& line : logs) {
         std::cout << line << "\n";
     }
+
+    std::cout << "\n";
+
+    std::cout << "Current instruction: " << proc->executedInstructions() << "\n"
+              << "Lines of code: " << proc->totalInstructions() << "\n\n";
 
     if (proc->isFinished()) {
         std::cout << "\nFinished!\n";

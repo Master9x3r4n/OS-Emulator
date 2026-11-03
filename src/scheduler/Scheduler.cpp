@@ -148,7 +148,7 @@ std::shared_ptr<Process> Scheduler::createProcessLocked(const std::string& name,
     {
         while (true)
         {
-            std::string candidate = "p" + std::to_string(procId) + "-" + std::to_string(generatedCount_++);
+            std::string candidate = "process" + std::to_string(procId);
             if (candidate.length() > Process::kMaxNameLength)
             {
                 candidate = candidate.substr(0, Process::kMaxNameLength);
