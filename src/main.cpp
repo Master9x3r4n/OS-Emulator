@@ -52,15 +52,18 @@ void renderProcessScreen(const std::shared_ptr<Process>& proc)
 {
     clearScreen();
     std::cout << "Process: " << proc->name() << "\n"
-              << "ID: " << proc->id() << "\n\n"
-              << "Current instruction: " << proc->executedInstructions() << "\n"
-              << "Lines of code: " << proc->totalInstructions() << "\n\n";
+              << "ID: " << proc->id() << "\n\n";
 
     std::cout << "Logs:\n";
     const auto logs = proc->getLogs();
     for (const auto& line : logs) {
         std::cout << line << "\n";
     }
+
+    std::cout << "\n";
+
+    std::cout << "Current instruction: " << proc->executedInstructions() << "\n"
+              << "Lines of code: " << proc->totalInstructions() << "\n\n";
 
     if (proc->isFinished()) {
         std::cout << "\nFinished!\n";
@@ -110,22 +113,22 @@ void handleScreenCommand(const std::vector<std::string>& args) {
     }
     else if (flag == "-s") {
         std::string procName = (args.size() >= 3) ? args[2] : "";
-        auto p = scheduler->createProcess(procName);
+        std::string error;
+        auto p = scheduler->createProcess(procName, &error);
         if (p) {
-            std::cout << "Created process '" << p->name() << "' (ID: " << p->id()
-                      << ") with " << p->totalInstructions() << " instructions.\n";
+            attachProcessScreen(p);
         } else {
-            std::cout << "Error: Process creation failed (duplicate name or invalid).\n";
+            std::cout << "Error: " << error << "\n";
         }
     }
     else if (flag == "-r") {
-        if (args.size() < 3){
+        if (args.size() < 3) {
             displayScreenHelp();
             return;
         }
         const std::string& procName = args[2];
         auto proc = scheduler->findProcess(procName);
-        if (!proc) {
+        if (!proc || proc->isFinished()) {
             std::cout << "Process " << procName << " not found.\n";
             return;
         }
@@ -156,13 +159,19 @@ int main() {
         {"report-util",     {true,  [](const auto&)  {
             GenerateReport(scheduler->snapshot(), true);
         }}},
-        {"scheduler-start", {true,  [](const auto&)  { 
-            /* TODO 2: call coresponding thread module to generate dummy processes */  
-            std::cout << "scheduler-start command recognized. Doing something.\n";
+        {"scheduler-start", {true, [](const auto&) {
+            if (scheduler->startGenerator()) {
+                std::cout << "Scheduler generation started.\n";
+            } else {
+                std::cout << "Scheduler generation is already running.\n";
+            }
         }}},
-        {"scheduler-stop",  {true,  [](const auto&)  { 
-            /* TODO 2: call coresponding thread module to stop generating dummy processes */ 
-            std::cout << "scheduler-stop command recognized. Doing something.\n"; 
+        {"scheduler-stop", {true, [](const auto&) {
+            if (scheduler->stopGenerator()) {
+                std::cout << "Scheduler generation stopped.\n";
+            } else {
+                std::cout << "Scheduler generation is not running.\n";
+            }
         }}},
         {"screen",          {true,  handleScreenCommand}}
     };

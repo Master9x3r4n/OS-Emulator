@@ -1,6 +1,5 @@
 #include <scheduler/Scheduler.hpp>
 
-#include <filesystem>
 #include <iostream>
 #include <system_error>
 
@@ -9,6 +8,7 @@ Scheduler::Scheduler(const Config& config, std::string logDir,
     : policy_(config.scheduler == "rr" ? Policy::RoundRobin : Policy::FCFS),
       numCores_(static_cast<uint32_t>(config.numCpu)),
       quantumCycles_(config.quantumCycles),
+      batchProcessFreq_(config.batchProcessFreq),
       delayPerExec_(config.delayPerExec),
       minIns_(config.minIns),
       maxIns_(config.maxIns),
@@ -53,6 +53,7 @@ void Scheduler::stop()
     {
         std::lock_guard<std::mutex> lk(mtx_);
         running_ = false;
+        generating_ = false;
     }
     cvTick_.notify_all();
     cvDone_.notify_all();
@@ -70,51 +71,115 @@ void Scheduler::joinAll()
     workers_.clear();
 }
 
+
+// Generator Controls
+bool Scheduler::startGenerator()
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (generating_)
+    {
+        return false;
+    }
+    generating_ = true;
+    return true;
+}
+
+bool Scheduler::stopGenerator()
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (!generating_)
+    {
+        return false;
+    }
+    generating_ = false;
+    return true;
+}
+
+bool Scheduler::isGenerating() const
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    return generating_;
+}
+
+// Process Creation & Lookup
 std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
+                                                  std::string* error,
                                                   uint32_t instructionCount)
 {
     std::lock_guard<std::mutex> lk(mtx_);
+    return createProcessLocked(name, error, instructionCount);
+}
 
+std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
+                                                  uint32_t instructionCount)
+{
+    return createProcess(name, nullptr, instructionCount);
+}
+
+std::shared_ptr<Process> Scheduler::createProcessLocked(const std::string& name,
+                                                        std::string* error,
+                                                        uint32_t instructionCount)
+{
     std::string finalName = name;
+    const uint32_t procId = nextId_;
 
     if (!finalName.empty())
     {
-        // 1. Truncate user name to 14 chars max BEFORE checking uniqueness
         if (finalName.length() > Process::kMaxNameLength)
         {
-            finalName = finalName.substr(0, Process::kMaxNameLength);
+            if (error)
+            {
+                *error = "Process name '" + finalName + "' exceeds maximum length of " +
+                         std::to_string(Process::kMaxNameLength) + " characters.";
+            }
+            return nullptr;
         }
 
-        // Check if the 14-char name already exists
         if (nameExistsLocked(finalName))
         {
+            if (error)
+            {
+                *error = "Process with name '" + finalName + "' already exists.";
+            }
             return nullptr;
         }
     }
     else
     {
-        // 2. Generate a name that is guaranteed NOT to collide with any user name
-        while (true)
+        // Base candidate name
+        std::string base = "process" + std::to_string(procId);
+        if (base.length() > Process::kMaxNameLength)
         {
-            char buf[16];
-            std::snprintf(buf, sizeof(buf), "p%02u", nextAutoNameId_++);
-            std::string candidate(buf);
-            if (!nameExistsLocked(candidate))
+            base = base.substr(0, Process::kMaxNameLength);
+        }
+
+        // If 'base' is already taken, advance suffix (-2, -3, ...) until unique
+        std::string candidate = base;
+        for (uint32_t n = 2; nameExistsLocked(candidate); ++n)
+        {
+            const std::string suffix = "-" + std::to_string(n);
+            if (suffix.length() >= Process::kMaxNameLength)
             {
-                finalName = candidate;
-                break;
+                candidate = suffix.substr(0, Process::kMaxNameLength);
+            }
+            else
+            {
+                candidate = base.substr(0, Process::kMaxNameLength - suffix.length()) + suffix;
             }
         }
+        finalName = candidate;
     }
+
+    ++nextId_;
 
     std::shared_ptr<Process> p;
     if (instructionCount > 0)
     {
-        p = std::make_shared<Process>(nextId_++, finalName, instructionCount);
+        p = std::make_shared<Process>(procId, finalName, instructionCount);
     }
     else
     {
-        p = std::make_shared<Process>(nextId_++, finalName, minIns_, maxIns_);
+        p = std::make_shared<Process>(procId, finalName, minIns_, maxIns_);
     }
 
     ready_.push_back(p);
@@ -134,23 +199,49 @@ bool Scheduler::nameExistsLocked(const std::string& name) const
     return false;
 }
 
-// ---------------------------------------------------------------------------
-// Scheduler thread (tick clock)
-// ---------------------------------------------------------------------------
+std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
+{
+    if (name.empty() || name.length() > Process::kMaxNameLength)
+    {
+        return nullptr;
+    }
 
+    std::lock_guard<std::mutex> lk(mtx_);
+    for (const auto& p : slots_)
+        if (p && p->name() == name) return p;
+    for (const auto& p : ready_)
+        if (p && p->name() == name) return p;
+    for (const auto& p : waiting_)
+        if (p && p->name() == name) return p;
+    for (const auto& p : finished_)
+        if (p && p->name() == name) return p;
+    return nullptr;
+}
+
+// Scheduler Loop & Synchronization
 void Scheduler::schedulerLoop()
 {
     std::unique_lock<std::mutex> lk(mtx_);
     while (running_)
     {
+        // 1. Generate batch dummy processes per tick if enabled
+        if (generating_)
+        {
+            for (uint64_t i = 0; i < batchProcessFreq_; ++i)
+            {
+                createProcessLocked();
+            }
+        }
+
+        // 2. Dispatch ready processes to idle cores
         dispatchLocked();
 
-        // One tick of wall-clock time; wakes early on shutdown.
+        // 3. Wall-clock tick duration (early wakeup on shutdown)
         cvSleep_.wait_for(lk, tickDuration_, [this] { return !running_; });
         if (!running_)
             break;
 
-        // Release every worker for exactly one tick and wait for all of them.
+        // 4. Release worker threads for 1 tick
         pending_ = numCores_;
         ++generation_;
         cvTick_.notify_all();
@@ -163,7 +254,6 @@ void Scheduler::schedulerLoop()
     }
 }
 
-// Fill idle cores from the front of the shared FIFO ready queue.
 void Scheduler::dispatchLocked()
 {
     for (uint32_t c = 0; c < numCores_; ++c)
@@ -179,8 +269,6 @@ void Scheduler::dispatchLocked()
     }
 }
 
-// After a tick: retire finished processes and, for round robin, rotate out
-// processes whose quantum expired. FCFS never preempts.
 void Scheduler::collectLocked()
 {
     // 1. Tick sleeping processes; when awake, return to ready queue
@@ -207,6 +295,7 @@ void Scheduler::collectLocked()
 
         if (p->isFinished())
         {
+            p->setCore(-1);
             p->setState(ProcessState::Finished);
             finished_.push_back(std::move(p));
             p.reset();
@@ -214,8 +303,16 @@ void Scheduler::collectLocked()
         }
         else if (p->state() == ProcessState::Waiting)
         {
-            // Process relinquished CPU due to SLEEP(X)
-            waiting_.push_back(std::move(p));
+            p->setCore(-1);
+            if (p->sleepTicksRemaining() == 0)
+            {
+                p->setState(ProcessState::Ready);
+                ready_.push_back(std::move(p));
+            }
+            else
+            {
+                waiting_.push_back(std::move(p));
+            }
             p.reset();
             quantumUsed_[c] = 0;
         }
@@ -223,6 +320,7 @@ void Scheduler::collectLocked()
         {
             if (!ready_.empty())
             {
+                p->setCore(-1);
                 p->setState(ProcessState::Ready);
                 ready_.push_back(std::move(p));
                 p.reset();
@@ -231,10 +329,6 @@ void Scheduler::collectLocked()
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Worker threads (one per core)
-// ---------------------------------------------------------------------------
 
 void Scheduler::workerLoop(uint32_t core)
 {
@@ -251,7 +345,6 @@ void Scheduler::workerLoop(uint32_t core)
         lk.unlock();
         if (proc)
         {
-            // This worker exclusively owns `proc` for the duration of the tick.
             proc->executeNext(core, delayPerExec_);
             ++quantumUsed_[core];
         }
@@ -262,10 +355,7 @@ void Scheduler::workerLoop(uint32_t core)
     }
 }
 
-// ---------------------------------------------------------------------------
 // Snapshot
-// ---------------------------------------------------------------------------
-
 Scheduler::ProcessInfo Scheduler::describeLocked(const Process& p) const
 {
     ProcessInfo info;
@@ -301,26 +391,4 @@ Scheduler::Snapshot Scheduler::snapshot() const
         s.finished.push_back(describeLocked(*p));
 
     return s;
-}
-
-
-// Look up any process
-std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
-{
-    std::string searchName = name;
-    if (searchName.length() > Process::kMaxNameLength)
-    {
-        searchName = searchName.substr(0, Process::kMaxNameLength);
-    }
-
-    std::lock_guard<std::mutex> lk(mtx_);
-    for (const auto& p : slots_)
-        if (p && p->name() == searchName) return p;
-    for (const auto& p : ready_)
-        if (p && p->name() == searchName) return p;
-    for (const auto& p : waiting_)
-        if (p && p->name() == searchName) return p;
-    for (const auto& p : finished_)
-        if (p && p->name() == searchName) return p;
-    return nullptr;
 }
