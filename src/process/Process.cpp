@@ -328,20 +328,23 @@ void Process::handleSleep(const DecodedInstruction& decoded, const ExecutionCont
 
 void Process::handleFor(const DecodedInstruction& decoded, const ExecutionContext& /*ctx*/)
 {
-    // Reject 4th nesting level
-    if (loopStack_.size() >= kMaxLoopDepth) {
+    const bool canEnter = loopStack_.size() < kMaxLoopDepth   // reject 4th nesting level
+                          && decoded.forRepeats > 0           // repeats == 0 skips the body
+                          && decoded.forBody
+                          && !decoded.forBody->empty();       // nothing to repeat
+
+    if (!canEnter)
+    {
+        advanceInstructionPointer();
         return;
     }
 
-    if (decoded.forBody && !decoded.forBody->empty() && decoded.forRepeats > 0)
-    {
-        LoopFrame frame;
-        frame.instructions = decoded.forBody;
-        frame.totalRepeats = decoded.forRepeats;
-        frame.currentRepeat = 0;
-        frame.pc = 0;
-        loopStack_.push_back(frame);
-    }
+    LoopFrame frame;
+    frame.instructions = decoded.forBody;
+    frame.totalRepeats = decoded.forRepeats;
+    frame.currentRepeat = 0;
+    frame.pc = 0;
+    loopStack_.push_back(frame);
 }
 
 void Process::handleInvalid(const DecodedInstruction& /*decoded*/, const ExecutionContext& /*ctx*/)
@@ -393,34 +396,15 @@ bool Process::step(uint32_t core)
             return false;
         }
 
-        if (inst->type == InstructionType::For)
-        {
-            const size_t depthBefore = loopStack_.size();
-            DecodedInstruction dec = decodeInstruction(*inst);
-
-            // Only enter the loop if within the 3-level depth limit and repeats > 0
-            if (depthBefore < kMaxLoopDepth && dec.forRepeats > 0 && dec.forBody && !dec.forBody->empty())
-            {
-                LoopFrame frame;
-                frame.instructions = dec.forBody;
-                frame.totalRepeats = dec.forRepeats;
-                frame.currentRepeat = 0;
-                frame.pc = 0;
-                loopStack_.push_back(frame);
-            }
-            else
-            {
-                // Skip the FOR instruction if repeats == 0, body is empty, or depth limit reached
-                advanceInstructionPointer();
-            }
-            continue;
-        }
-
         // Standard instruction execution (PRINT, DECLARE, ADD, SUBTRACT, SLEEP)
         ExecutionContext ctx{*this, core, std::chrono::system_clock::now()};
         const DecodedInstruction dec = decodeInstruction(*inst);
-
         executeInstruction(dec, ctx);
+
+        // FOR only enters or skips a loop: it is not a line of code, so it costs no tick.
+        if (dec.type == InstructionType::For)
+            continue;
+
         executed_.fetch_add(1);
         advanceInstructionPointer();
 
