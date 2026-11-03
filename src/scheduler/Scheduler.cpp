@@ -146,20 +146,28 @@ std::shared_ptr<Process> Scheduler::createProcessLocked(const std::string& name,
     }
     else
     {
-        while (true)
+        // Base candidate name
+        std::string base = "process" + std::to_string(procId);
+        if (base.length() > Process::kMaxNameLength)
         {
-            std::string candidate = "process" + std::to_string(procId);
-            if (candidate.length() > Process::kMaxNameLength)
-            {
-                candidate = candidate.substr(0, Process::kMaxNameLength);
-            }
+            base = base.substr(0, Process::kMaxNameLength);
+        }
 
-            if (!nameExistsLocked(candidate))
+        // If 'base' is already taken, advance suffix (-2, -3, ...) until unique
+        std::string candidate = base;
+        for (uint32_t n = 2; nameExistsLocked(candidate); ++n)
+        {
+            const std::string suffix = "-" + std::to_string(n);
+            if (suffix.length() >= Process::kMaxNameLength)
             {
-                finalName = candidate;
-                break;
+                candidate = suffix.substr(0, Process::kMaxNameLength);
+            }
+            else
+            {
+                candidate = base.substr(0, Process::kMaxNameLength - suffix.length()) + suffix;
             }
         }
+        finalName = candidate;
     }
 
     ++nextId_;
