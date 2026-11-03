@@ -177,10 +177,7 @@ void Process::setMaxLogCapacity(size_t cap)
 void Process::putToSleep(uint8_t ticks)
 {
     sleepTicksRemaining_ = ticks;
-    if (ticks > 0)
-        state_.store(ProcessState::Waiting);
-    else
-        state_.store(ProcessState::Ready);
+    state_.store(ProcessState::Waiting);
 }
 
 void Process::tickSleep()
