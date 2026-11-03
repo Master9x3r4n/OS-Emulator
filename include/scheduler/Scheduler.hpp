@@ -75,8 +75,8 @@ private:
     uint32_t numCores_;
     uint64_t quantumCycles_;
     uint64_t delayPerExec_;
-    uint64_t minIns_ = 1000;          // <-- Added
-    uint64_t maxIns_ = 2000;          // <-- Added
+    uint64_t minIns_ = 1000;         
+    uint64_t maxIns_ = 2000;          
     std::chrono::milliseconds tickDuration_;
     std::string logDir_;
     bool loggingEnabled_;
@@ -91,12 +91,12 @@ private:
     uint32_t pending_ = 0;
     uint64_t cpuCycles_ = 0;
     uint32_t nextId_ = 1;
-    uint32_t nextAutoNameId_ = 1;     // <-- Added
+    uint32_t generatedCount_ = 1;     // running counter for generated processes
 
     std::deque<std::shared_ptr<Process>> ready_;
     std::vector<std::shared_ptr<Process>> slots_;
     std::vector<uint64_t> quantumUsed_;
-    std::vector<std::shared_ptr<Process>> waiting_;  // <-- Added for SLEEP(X)
+    std::vector<std::shared_ptr<Process>> waiting_;  
     std::vector<std::shared_ptr<Process>> finished_;
 
     std::thread schedulerThread_;

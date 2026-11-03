@@ -77,10 +77,11 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
     std::lock_guard<std::mutex> lk(mtx_);
 
     std::string finalName = name;
+    const uint32_t procId = nextId_;
 
     if (!finalName.empty())
     {
-        // 1. Validate max length (must be <= 14 characters)
+        // 1. Validate name length (<= 14 characters)
         if (finalName.length() > Process::kMaxNameLength)
         {
             if (error)
@@ -103,12 +104,15 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
     }
     else
     {
-        // Generate a unique auto-name: p01, p02, ...
+        // Generate name: p<process_id>-<count>
         while (true)
         {
-            char buf[16];
-            std::snprintf(buf, sizeof(buf), "p%02u", nextAutoNameId_++);
-            std::string candidate(buf);
+            std::string candidate = "p" + std::to_string(procId) + "-" + std::to_string(generatedCount_++);
+            if (candidate.length() > Process::kMaxNameLength)
+            {
+                candidate = candidate.substr(0, Process::kMaxNameLength);
+            }
+
             if (!nameExistsLocked(candidate))
             {
                 finalName = candidate;
@@ -117,14 +121,17 @@ std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
         }
     }
 
+    // Process is successfully created: increment ID
+    ++nextId_;
+
     std::shared_ptr<Process> p;
     if (instructionCount > 0)
     {
-        p = std::make_shared<Process>(nextId_++, finalName, instructionCount);
+        p = std::make_shared<Process>(procId, finalName, instructionCount);
     }
     else
     {
-        p = std::make_shared<Process>(nextId_++, finalName, minIns_, maxIns_);
+        p = std::make_shared<Process>(procId, finalName, minIns_, maxIns_);
     }
 
     ready_.push_back(p);

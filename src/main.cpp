@@ -109,11 +109,7 @@ void handleScreenCommand(const std::vector<std::string>& args) {
         GenerateReport(scheduler->snapshot());
     }
     else if (flag == "-s") {
-        if (args.size() < 3) {
-            displayScreenHelp();
-            return;
-        }
-        const std::string& procName = args[2];
+        std::string procName = (args.size() >= 3) ? args[2] : "";
         std::string error;
         auto p = scheduler->createProcess(procName, &error);
         if (p) {
