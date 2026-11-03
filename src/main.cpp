@@ -82,7 +82,10 @@ void attachProcessScreen(const std::shared_ptr<Process>& proc)
         }
 
         const std::string& cmd = input[0];
-        if (cmd == "exit") {
+        if (cmd == "help") {
+            displayProcessHelp();
+        }
+        else if (cmd == "exit") {
             break;
         }
         else if (cmd == "process-smi") {
@@ -92,7 +95,7 @@ void attachProcessScreen(const std::shared_ptr<Process>& proc)
             clearScreen();
         }
         else {
-            std::cout << "Unknown command. Valid commands: 'process-smi', 'clear', 'exit'\n";
+            std::cout << "Unknown command. Type 'help' for list of valid commands.\n";
         }
     }
 
@@ -112,7 +115,13 @@ void handleScreenCommand(const std::vector<std::string>& args) {
         GenerateReport(scheduler->snapshot());
     }
     else if (flag == "-s") {
-        std::string procName = (args.size() >= 3) ? args[2] : "";
+        if (args.size() < 3) {
+            displayScreenHelp();
+            return;
+        }
+
+        // std::string procName = (args.size() >= 3) ? args[2] : "";
+        std::string procName = args[2];
         std::string error;
         auto p = scheduler->createProcess(procName, &error);
         if (p) {

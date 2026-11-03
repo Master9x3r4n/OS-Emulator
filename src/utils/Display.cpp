@@ -57,6 +57,21 @@ void displayScreenHelp()
               << "  " << std::left << std::setw(colWidth) << "-s <process_name>" << "Create a new process\n\n";
 }
 
+void displayProcessHelp()
+{
+    const int colWidth = 28;
+
+    std::cout << "USAGE:\n"
+              << "  <command>\n\n"
+              << "PROCESS SCREEN COMMANDS:\n"
+              << "  " << std::left << std::setw(colWidth) << "process-smi" << "Print information about current process\n"
+              << "  " << std::left << std::setw(colWidth) << "clear" << "Clear the console content\n"
+              << "  " << std::left << std::setw(colWidth) << "exit" << "Stop viewing process screen\n"
+              << "  " << std::left << std::setw(colWidth) << "help" << "Display list of commands\n";
+
+    std::cout << "\n";    
+}
+
 void clearScreen()
 {
     std::cout << "\n\033[H\033[J";
