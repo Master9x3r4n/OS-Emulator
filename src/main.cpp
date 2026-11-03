@@ -152,7 +152,7 @@ int main() {
         // Core Commands
         {"initialize",      {false, [&](const auto&) { isProgramInitialized = initializeEmulator(configPath); }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
-        {"clear",           {false, [](const auto&)  { }}}, /* Redraw handled by main loop */
+        {"clear",           {false, [](const auto&)  { clearScreen(); displayConsole(); }}}, /* Redraw handled by main loop */
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
 
         // Process Management Commands
@@ -182,11 +182,15 @@ int main() {
 
     while (isProgramRunning) {
         commandInput = getInput();
-        clearScreen();
-        displayConsole();
+
+        // If closed stdin (EOF), terminate program
+        if (std::cin.eof()) {
+            isProgramRunning = false;
+            break;
+        }
 
         // Safety guard against empty inputs
-        if (commandInput.empty()) {
+        if (commandInput.empty() || commandInput[0].empty() ) {
             continue;
         }
 
