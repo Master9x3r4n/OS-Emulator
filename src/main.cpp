@@ -78,6 +78,11 @@ void attachProcessScreen(const std::shared_ptr<Process>& proc)
 
     while (true) {
         std::vector<std::string> input = getInput();
+
+        if (std::cin.eof()) {
+            break;
+        }
+
         if (input.empty() || input[0].empty()) {
             continue;
         }
@@ -101,8 +106,11 @@ void attachProcessScreen(const std::shared_ptr<Process>& proc)
     }
 
     proc->setAttached(false);
-    clearScreen();
-    displayConsole();
+    
+    if (!std::cin.eof()) {
+        clearScreen();
+        displayConsole();
+    }
 }
 
 void handleScreenCommand(const std::vector<std::string>& args) {
@@ -191,6 +199,11 @@ int main() {
     std::cout << "Type 'help' for a list of commands\n";
 
     while (isProgramRunning) {
+        if (std::cin.eof()) {
+            isProgramRunning = false;
+            break;
+        }
+        
         commandInput = getInput();
 
         // If closed stdin (EOF), terminate program
