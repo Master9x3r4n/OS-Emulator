@@ -81,6 +81,7 @@ bool Scheduler::startGenerator()
         return false;
     }
     generating_ = true;
+    batchTicks_ = 0;
     return true;
 }
 
@@ -92,6 +93,7 @@ bool Scheduler::stopGenerator()
         return false;
     }
     generating_ = false;
+    batchTicks_ = 0;
     return true;
 }
 
@@ -227,9 +229,11 @@ void Scheduler::schedulerLoop()
         // 1. Generate batch dummy processes per tick if enabled
         if (generating_)
         {
-            for (uint64_t i = 0; i < batchProcessFreq_; ++i)
+            ++batchTicks_;
+            if (batchTicks_ >= batchProcessFreq_)
             {
                 createProcessLocked();
+                batchTicks_ = 0;
             }
         }
 

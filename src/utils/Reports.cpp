@@ -39,19 +39,21 @@ void GenerateReport(const Scheduler::Snapshot& snapshot, bool printOutput)
                       << p.executed << " / " << p.total << "\n";
         }
 
-        outStream << "---------------------------------------------------------------------------\n";
+        outStream << "---------------------------------------------------------------------------\n\n";
     };
 
     // render output to console window
-    renderReport(std::cout);
+    if (!printOutput) {
+        renderReport(std::cout);
+    }
 
     if (printOutput)
     {
-        std::ofstream outFile("csopesy-log.txt");
+        std::ofstream outFile("../../logs/csopesy-log.txt");
         if (outFile.is_open())
         {
             renderReport(outFile);
-            std::cout << "Report successfully generated and saved to csopesy-log.txt\n";
+            std::cout << "Report generated at ./logs/csopesy-log.txt!\n";
         }
         else
         {

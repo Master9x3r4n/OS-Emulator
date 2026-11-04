@@ -81,6 +81,7 @@ private:
     uint64_t generation_ = 0;
     uint32_t pending_ = 0;
     uint64_t cpuCycles_ = 0;
+    uint64_t batchTicks_ = 0;
     uint32_t nextId_ = 1;
     uint32_t generatedCount_ = 1;
 

@@ -14,7 +14,7 @@ void displayConsole()
               << "   Claro, Stephen\n"
               << "   Infante, Gabriel\n"
               << "   Omandac, Karl\n"
-              << "   Placer, John\n\n";
+              << "   Placer, Paul\n\n";
     std::cout << "Version Date: v9.15.26\n";
     std::cout << "---------------------------------------------------------------------------\n";
 }
@@ -55,6 +55,21 @@ void displayScreenHelp()
               << "  " << std::left << std::setw(colWidth) << "-ls" << "List all running processes\n"
               << "  " << std::left << std::setw(colWidth) << "-r <process_name>" << "Access an existing process\n"
               << "  " << std::left << std::setw(colWidth) << "-s <process_name>" << "Create a new process\n\n";
+}
+
+void displayProcessHelp()
+{
+    const int colWidth = 28;
+
+    std::cout << "USAGE:\n"
+              << "  <command>\n\n"
+              << "PROCESS SCREEN COMMANDS:\n"
+              << "  " << std::left << std::setw(colWidth) << "process-smi" << "Print information about current process\n"
+              << "  " << std::left << std::setw(colWidth) << "clear" << "Clear the console content\n"
+              << "  " << std::left << std::setw(colWidth) << "exit" << "Stop viewing process screen\n"
+              << "  " << std::left << std::setw(colWidth) << "help" << "Display list of commands\n";
+
+    std::cout << "\n";    
 }
 
 void clearScreen()

@@ -50,11 +50,10 @@ struct Command {
 
 void renderProcessScreen(const std::shared_ptr<Process>& proc)
 {
-    clearScreen();
     std::cout << "Process: " << proc->name() << "\n"
-              << "ID: " << proc->id() << "\n\n";
-
+              << "ID: " << proc->id() << "\n";
     std::cout << "Logs:\n";
+
     const auto logs = proc->getLogs();
     for (const auto& line : logs) {
         std::cout << line << "\n";
@@ -62,27 +61,37 @@ void renderProcessScreen(const std::shared_ptr<Process>& proc)
 
     std::cout << "\n";
 
-    std::cout << "Current instruction: " << proc->executedInstructions() << "\n"
-              << "Lines of code: " << proc->totalInstructions() << "\n\n";
-
-    if (proc->isFinished()) {
-        std::cout << "\nFinished!\n";
+    if (!proc->isFinished()) {
+        std::cout << "Current instruction: " << proc->executedInstructions() << "\n"
+                  << "Lines of code: " << proc->totalInstructions() << "\n\n";
+    }
+    else {
+        std::cout << "Finished!\n\n";
     }
 }
 
 void attachProcessScreen(const std::shared_ptr<Process>& proc)
 {
     proc->setAttached(true);
+    clearScreen();
     renderProcessScreen(proc);
 
     while (true) {
         std::vector<std::string> input = getInput();
+
+        if (std::cin.eof()) {
+            break;
+        }
+
         if (input.empty() || input[0].empty()) {
             continue;
         }
 
         const std::string& cmd = input[0];
-        if (cmd == "exit") {
+        if (cmd == "help") {
+            displayProcessHelp();
+        }
+        else if (cmd == "exit") {
             break;
         }
         else if (cmd == "process-smi") {
@@ -92,13 +101,16 @@ void attachProcessScreen(const std::shared_ptr<Process>& proc)
             clearScreen();
         }
         else {
-            std::cout << "Unknown command. Valid commands: 'process-smi', 'clear', 'exit'\n";
+            std::cout << "Unknown command. Type 'help' for list of valid commands.\n";
         }
     }
 
     proc->setAttached(false);
-    clearScreen();
-    displayConsole();
+    
+    if (!std::cin.eof()) {
+        clearScreen();
+        displayConsole();
+    }
 }
 
 void handleScreenCommand(const std::vector<std::string>& args) {
@@ -112,7 +124,13 @@ void handleScreenCommand(const std::vector<std::string>& args) {
         GenerateReport(scheduler->snapshot());
     }
     else if (flag == "-s") {
-        std::string procName = (args.size() >= 3) ? args[2] : "";
+        if (args.size() < 3) {
+            displayScreenHelp();
+            return;
+        }
+
+        // std::string procName = (args.size() >= 3) ? args[2] : "";
+        std::string procName = args[2];
         std::string error;
         auto p = scheduler->createProcess(procName, &error);
         if (p) {
@@ -152,7 +170,7 @@ int main() {
         // Core Commands
         {"initialize",      {false, [&](const auto&) { isProgramInitialized = initializeEmulator(configPath); }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
-        {"clear",           {false, [](const auto&)  { }}}, /* Redraw handled by main loop */
+        {"clear",           {false, [](const auto&)  { clearScreen(); displayConsole(); }}}, /* Redraw handled by main loop */
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
 
         // Process Management Commands
@@ -181,12 +199,21 @@ int main() {
     std::cout << "Type 'help' for a list of commands\n";
 
     while (isProgramRunning) {
+        if (std::cin.eof()) {
+            isProgramRunning = false;
+            break;
+        }
+        
         commandInput = getInput();
-        clearScreen();
-        displayConsole();
+
+        // If closed stdin (EOF), terminate program
+        if (std::cin.eof()) {
+            isProgramRunning = false;
+            break;
+        }
 
         // Safety guard against empty inputs
-        if (commandInput.empty()) {
+        if (commandInput.empty() || commandInput[0].empty() ) {
             continue;
         }
 
