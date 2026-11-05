@@ -49,7 +49,7 @@ void GenerateReport(const Scheduler::Snapshot& snapshot, bool printOutput)
 
     if (printOutput)
     {
-        std::ofstream outFile("../../logs/csopesy-log.txt");
+        std::ofstream outFile(std::string(PROJECT_DIR) + "/logs/csopesy-log.txt");
         if (outFile.is_open())
         {
             renderReport(outFile);
