@@ -173,5 +173,39 @@ bool Config::validateCrossFields() const
                   << std::endl;
         return false;
     }
+    if (memPerFrame > maxOverallMem)
+    {
+        std::cerr << "Error: mem-per-frame (" << memPerFrame
+                  << ") cannot be greater than max-overall-mem (" << maxOverallMem << ")"
+                  << std::endl;
+        return false;
+    }
+    if (minMemPerProc > maxMemPerProc)
+    {
+        std::cerr << "Error: min-mem-per-proc (" << minMemPerProc
+                  << ") cannot be greater than max-mem-per-proc (" << maxMemPerProc << ")"
+                  << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool Config::isPowerOfTwo(uint64_t value)
+{
+    return value != 0 && (value & (value - 1)) == 0;
+}
+
+bool Config::readMemorySize(const std::string& key, const std::string& value,
+                            int lineNum, uint64_t& out) const
+{
+    if (!readNumber(key, value, lineNum, kMinMemBytes, kMaxMemBytes, out))
+        return false;
+
+    if (!isPowerOfTwo(out))
+    {
+        std::cerr << "Error: " << key << " must be a power of 2, got "
+                  << out << " (line " << lineNum << ")" << std::endl;
+        return false;
+    }
     return true;
 }
