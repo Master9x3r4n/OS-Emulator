@@ -2,4 +2,4 @@ build/
 *.exe
 *.xml
 logs/
-csopesy-log.txt
+logs/csopesy-log.txt
