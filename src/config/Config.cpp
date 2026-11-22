@@ -156,6 +156,26 @@ bool Config::parseEntry(const std::string& key, const std::string& value, int li
         if (!readNumber(key, value, lineNum, 0, kMaxValue, v)) return false;
         delayPerExec = v;
     }
+    else if (key == "max-overall-mem")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        maxOverallMem = v;
+    }
+    else if (key == "mem-per-frame")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        memPerFrame = v;
+    }
+    else if (key == "min-mem-per-proc")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        minMemPerProc = v;
+    }
+    else if (key == "max-mem-per-proc")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        maxMemPerProc = v;
+    }
     else
     {
         std::cerr << "Warning: unknown key '" << key << "' on line "
