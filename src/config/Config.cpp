@@ -156,6 +156,26 @@ bool Config::parseEntry(const std::string& key, const std::string& value, int li
         if (!readNumber(key, value, lineNum, 0, kMaxValue, v)) return false;
         delayPerExec = v;
     }
+    else if (key == "max-overall-mem")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        maxOverallMem = v;
+    }
+    else if (key == "mem-per-frame")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        memPerFrame = v;
+    }
+    else if (key == "min-mem-per-proc")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        minMemPerProc = v;
+    }
+    else if (key == "max-mem-per-proc")
+    {
+        if (!readMemorySize(key, value, lineNum, v)) return false;
+        maxMemPerProc = v;
+    }
     else
     {
         std::cerr << "Warning: unknown key '" << key << "' on line "
@@ -171,6 +191,40 @@ bool Config::validateCrossFields() const
         std::cerr << "Error: min-ins (" << minIns
                   << ") cannot be greater than max-ins (" << maxIns << ")"
                   << std::endl;
+        return false;
+    }
+    if (memPerFrame > maxOverallMem)
+    {
+        std::cerr << "Error: mem-per-frame (" << memPerFrame
+                  << ") cannot be greater than max-overall-mem (" << maxOverallMem << ")"
+                  << std::endl;
+        return false;
+    }
+    if (minMemPerProc > maxMemPerProc)
+    {
+        std::cerr << "Error: min-mem-per-proc (" << minMemPerProc
+                  << ") cannot be greater than max-mem-per-proc (" << maxMemPerProc << ")"
+                  << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool Config::isPowerOfTwo(uint64_t value)
+{
+    return value != 0 && (value & (value - 1)) == 0;
+}
+
+bool Config::readMemorySize(const std::string& key, const std::string& value,
+                            int lineNum, uint64_t& out) const
+{
+    if (!readNumber(key, value, lineNum, kMinMemBytes, kMaxMemBytes, out))
+        return false;
+
+    if (!isPowerOfTwo(out))
+    {
+        std::cerr << "Error: " << key << " must be a power of 2, got "
+                  << out << " (line " << lineNum << ")" << std::endl;
         return false;
     }
     return true;
