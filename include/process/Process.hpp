@@ -24,9 +24,9 @@ class Process {
 public:
     static constexpr size_t kMaxNameLength = 14;
 
-    Process(uint32_t id, std::string name = "", uint32_t instructionCount = 0);
-    Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns);
-    Process(uint32_t id, std::string name, std::vector<Instruction> instructions);
+    Process(uint32_t id, std::string name = "", uint32_t instructionCount = 0, uint64_t memorySize = 64);
+    Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns, uint64_t memorySize = 64);
+    Process(uint32_t id, std::string name, std::vector<Instruction> instructions, uint64_t memorySize = 64);
     ~Process();
 
     // Identity and State
@@ -48,6 +48,9 @@ public:
     
     bool isFinished() const { return state_.load() == ProcessState::Finished || executed_.load() >= totalInstructions_; }
     bool isWaiting() const { return state_.load() == ProcessState::Waiting; }
+
+    uint64_t memorySize() const { return memorySize_; }
+    void setMemorySize(uint64_t bytes) { memorySize_ = bytes; }
 
     // Helpers forwarding to InstructionGenerator
     static uint32_t countTotalInstructions(const std::vector<Instruction>& insts, size_t currentDepth = 0) {
@@ -135,6 +138,8 @@ private:
     std::atomic<int> core_{-1};
     uint64_t delayRemaining_ = 0;
     std::atomic<uint32_t> sleepTicksRemaining_{0};
+
+    uint64_t memorySize_ = 64;
 
     SymbolTable symbolTable_;
     ProcessLogBuffer logBuffer_;

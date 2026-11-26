@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <config/Config.hpp>
+#include <memory/MemoryManager.hpp>
 #include <process/Process.hpp>
 #include <scheduler/SchedulerSettings.hpp>
 #include <scheduler/SchedulerTypes.hpp>
@@ -23,6 +24,11 @@ public:
 
     Scheduler(const Config& config, std::string logDir,
               std::chrono::milliseconds tickDuration = SchedulerSettings::kTickDuration);
+
+    Scheduler(const Config& config, std::string logDir,
+              std::shared_ptr<MemoryManager> memoryManager,
+              std::chrono::milliseconds tickDuration = SchedulerSettings::kTickDuration);
+
     ~Scheduler();
 
     Scheduler(const Scheduler&) = delete;
@@ -39,13 +45,18 @@ public:
     // Process creation (thread-safe)
     std::shared_ptr<Process> createProcess(const std::string& name = "",
                                            std::string* error = nullptr,
-                                           uint32_t instructionCount = 0);
+                                           uint32_t instructionCount = 0,
+                                           uint64_t memorySize = 64);
 
     std::shared_ptr<Process> createProcess(const std::string& name,
-                                           uint32_t instructionCount);
+                                           uint32_t instructionCount,
+                                           uint64_t memorySize = 64);
 
     Snapshot snapshot() const;
     std::shared_ptr<Process> findProcess(const std::string& name) const;
+
+    std::shared_ptr<MemoryManager> memoryManager() const { return memoryManager_; }
+    void setMemoryManager(std::shared_ptr<MemoryManager> mm) { memoryManager_ = std::move(mm); }
 
 private:
     void schedulerLoop();
@@ -58,7 +69,8 @@ private:
 
     std::shared_ptr<Process> createProcessLocked(const std::string& name = "",
                                                 std::string* error = nullptr,
-                                                uint32_t instructionCount = 0);
+                                                uint32_t instructionCount = 0,
+                                                uint64_t memorySize = 64);
 
     // Configuration
     Policy policy_;
@@ -70,6 +82,8 @@ private:
     uint64_t maxIns_ = 2000;          
     std::chrono::milliseconds tickDuration_;
     std::string logDir_;
+
+    std::shared_ptr<MemoryManager> memoryManager_;
 
     // Thread synchronization & state
     mutable std::mutex mtx_;

@@ -9,6 +9,8 @@ find_package(Threads REQUIRED)
 set(SOURCE_FILES
     src/main.cpp
     src/config/Config.cpp
+    src/memory/BackingStore.cpp
+    src/memory/MemoryManager.cpp
     src/process/Process.cpp
     src/process/Instruction.cpp
     src/process/InstructionGenerator.cpp
@@ -21,7 +23,9 @@ set(SOURCE_FILES
 )
 
 add_executable(OS_Emulator ${SOURCE_FILES}
-    include/process/SymbolTable.hpp)
+    include/process/SymbolTable.hpp
+    include/memory/PageTable.hpp
+    )
 
 target_include_directories(OS_Emulator PRIVATE
     include
