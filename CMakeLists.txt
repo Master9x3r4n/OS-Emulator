@@ -9,6 +9,7 @@ find_package(Threads REQUIRED)
 set(SOURCE_FILES
     src/main.cpp
     src/config/Config.cpp
+    src/memory/BackingStore.cpp
     src/process/Process.cpp
     src/process/Instruction.cpp
     src/process/InstructionGenerator.cpp
