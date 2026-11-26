@@ -10,14 +10,15 @@
 #include <utils/Display.hpp>
 #include <utils/Reports.hpp>
 #include <config/Config.hpp>
+#include <memory/BackingStore.hpp>
+#include <memory/MemoryManager.hpp>
 #include <scheduler/Scheduler.hpp>
 
 Config config;
+std::shared_ptr<BackingStore> backingStore;
+std::shared_ptr<MemoryManager> memoryManager;
 std::unique_ptr<Scheduler> scheduler;
 
-// Loads config.txt, starts the scheduler (scheduler thread + one worker per
-// core) and, for the homework test case, seeds the test processes.
-// Returns true if the emulator is now initialized.
 bool initializeEmulator(const std::string& configPath) {
     if (scheduler) {
         std::cout << "Program is already initialized.\n";
@@ -27,9 +28,14 @@ bool initializeEmulator(const std::string& configPath) {
     if (!config.initialize(configPath))
         return false;
 
-    scheduler = std::make_unique<Scheduler>(config, std::string(PROJECT_DIR) + "/logs");
+    backingStore = std::make_shared<BackingStore>(std::string(PROJECT_DIR) + "/logs/csopesy-backing-store.txt");
+    memoryManager = std::make_shared<MemoryManager>(config, backingStore);
+
+    scheduler = std::make_unique<Scheduler>(config, std::string(PROJECT_DIR) + "/logs", memoryManager);
     if (!scheduler->start()) {
         scheduler.reset();
+        memoryManager.reset();
+        backingStore.reset();
         return false;
     }
 
@@ -129,7 +135,6 @@ void handleScreenCommand(const std::vector<std::string>& args) {
             return;
         }
 
-        // std::string procName = (args.size() >= 3) ? args[2] : "";
         std::string procName = args[2];
         std::string error;
         auto p = scheduler->createProcess(procName, &error);
@@ -162,18 +167,14 @@ int main() {
     bool isProgramInitialized = false;
     std::vector<std::string> commandInput;
 
-    // Build an absolute path to config.txt from the CMake-provided PROJECT_DIR.
     const std::string configPath = std::string(PROJECT_DIR) + "/config/config.txt";
 
-    // Command Dispatch Registry using Unordered Map
     std::unordered_map<std::string, Command> commandRegistry = {
-        // Core Commands
         {"initialize",      {false, [&](const auto&) { isProgramInitialized = initializeEmulator(configPath); }}},
         {"help",            {false, [&](const auto&) { displayHelp(isProgramInitialized); }}},
-        {"clear",           {false, [](const auto&)  { clearScreen(); displayConsole(); }}}, /* Redraw handled by main loop */
+        {"clear",           {false, [](const auto&)  { clearScreen(); displayConsole(); }}},
         {"exit",            {false, [&](const auto&) { isProgramRunning = false; }}},
 
-        // Process Management Commands
         {"report-util",     {true,  [](const auto&)  {
             GenerateReport(scheduler->snapshot(), true);
         }}},
@@ -206,13 +207,11 @@ int main() {
         
         commandInput = getInput();
 
-        // If closed stdin (EOF), terminate program
         if (std::cin.eof()) {
             isProgramRunning = false;
             break;
         }
 
-        // Safety guard against empty inputs
         if (commandInput.empty() || commandInput[0].empty() ) {
             continue;
         }
@@ -233,7 +232,6 @@ int main() {
         }
     }
 
-    // Signal shutdown and join the scheduler + worker threads.
     if (scheduler)
         scheduler->stop();
 

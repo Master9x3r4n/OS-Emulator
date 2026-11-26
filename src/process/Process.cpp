@@ -18,30 +18,33 @@ std::string Process::sanitizeOrGenerateName(uint32_t id, std::string name)
     return name;
 }
 
-Process::Process(uint32_t id, std::string name, uint32_t instructionCount)
+Process::Process(uint32_t id, std::string name, uint32_t instructionCount, uint64_t memorySize)
     : id_(id),
       name_(sanitizeOrGenerateName(id, std::move(name))),
-      createdAt_(formatTimestamp())
+      createdAt_(formatTimestamp(std::chrono::system_clock::now())),
+      memorySize_(memorySize)
 {
     const uint64_t count = (instructionCount == 0) ? 10 : instructionCount;
     instructions_ = InstructionGenerator::generateRandomInstructions(count, count, name_);
     totalInstructions_ = InstructionGenerator::countTotalInstructions(instructions_);
 }
 
-Process::Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns)
+Process::Process(uint32_t id, std::string name, uint64_t minIns, uint64_t maxIns, uint64_t memorySize)
     : id_(id),
       name_(sanitizeOrGenerateName(id, std::move(name))),
-      createdAt_(formatTimestamp())
+      createdAt_(formatTimestamp(std::chrono::system_clock::now())),
+      memorySize_(memorySize)
 {
     instructions_ = InstructionGenerator::generateRandomInstructions(minIns, maxIns, name_);
     totalInstructions_ = InstructionGenerator::countTotalInstructions(instructions_);
 }
 
-Process::Process(uint32_t id, std::string name, std::vector<Instruction> instructions)
+Process::Process(uint32_t id, std::string name, std::vector<Instruction> instructions, uint64_t memorySize)
     : id_(id),
       name_(sanitizeOrGenerateName(id, std::move(name))),
-      createdAt_(formatTimestamp()),
-      instructions_(std::move(instructions))
+      createdAt_(formatTimestamp(std::chrono::system_clock::now())),
+      instructions_(std::move(instructions)),
+      memorySize_(memorySize)
 {
     if (instructions_.empty())
     {
@@ -57,7 +60,7 @@ void Process::markRunning(int core)
     core_.store(core);
     state_.store(ProcessState::Running);
     if (startedAt_.empty())
-        startedAt_ = formatTimestamp();
+        startedAt_ = formatTimestamp(std::chrono::system_clock::now());
 }
 
 // ---------------------------------------------------------------------------

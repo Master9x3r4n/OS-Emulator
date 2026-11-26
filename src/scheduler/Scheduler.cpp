@@ -5,6 +5,13 @@
 
 Scheduler::Scheduler(const Config& config, std::string logDir,
                      std::chrono::milliseconds tickDuration)
+    : Scheduler(config, std::move(logDir), nullptr, tickDuration)
+{
+}
+
+Scheduler::Scheduler(const Config& config, std::string logDir,
+                     std::shared_ptr<MemoryManager> memoryManager,
+                     std::chrono::milliseconds tickDuration)
     : policy_(config.scheduler == "rr" ? Policy::RoundRobin : Policy::FCFS),
       numCores_(static_cast<uint32_t>(config.numCpu)),
       quantumCycles_(config.quantumCycles),
@@ -13,6 +20,8 @@ Scheduler::Scheduler(const Config& config, std::string logDir,
       minIns_(config.minIns),
       maxIns_(config.maxIns),
       tickDuration_(tickDuration),
+      logDir_(std::move(logDir)),
+      memoryManager_(std::move(memoryManager)),
       slots_(numCores_),
       quantumUsed_(numCores_, 0)
 {
@@ -59,6 +68,33 @@ void Scheduler::stop()
     cvDone_.notify_all();
     cvSleep_.notify_all();
     joinAll();
+
+    // Release all frames and backing-store pages for unfinished processes on shutdown
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (memoryManager_)
+    {
+        for (auto& p : slots_)
+        {
+            if (p)
+            {
+                memoryManager_->releaseProcess(p->name());
+            }
+        }
+        for (auto& p : ready_)
+        {
+            if (p)
+            {
+                memoryManager_->releaseProcess(p->name());
+            }
+        }
+        for (auto& p : waiting_)
+        {
+            if (p)
+            {
+                memoryManager_->releaseProcess(p->name());
+            }
+        }
+    }
 }
 
 void Scheduler::joinAll()
@@ -70,7 +106,6 @@ void Scheduler::joinAll()
             w.join();
     workers_.clear();
 }
-
 
 // Generator Controls
 bool Scheduler::startGenerator()
@@ -106,21 +141,24 @@ bool Scheduler::isGenerating() const
 // Process Creation & Lookup
 std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
                                                   std::string* error,
-                                                  uint32_t instructionCount)
+                                                  uint32_t instructionCount,
+                                                  uint64_t memorySize)
 {
     std::lock_guard<std::mutex> lk(mtx_);
-    return createProcessLocked(name, error, instructionCount);
+    return createProcessLocked(name, error, instructionCount, memorySize);
 }
 
 std::shared_ptr<Process> Scheduler::createProcess(const std::string& name,
-                                                  uint32_t instructionCount)
+                                                  uint32_t instructionCount,
+                                                  uint64_t memorySize)
 {
-    return createProcess(name, nullptr, instructionCount);
+    return createProcess(name, nullptr, instructionCount, memorySize);
 }
 
 std::shared_ptr<Process> Scheduler::createProcessLocked(const std::string& name,
                                                         std::string* error,
-                                                        uint32_t instructionCount)
+                                                        uint32_t instructionCount,
+                                                        uint64_t memorySize)
 {
     std::string finalName = name;
     const uint32_t procId = nextId_;
@@ -155,7 +193,7 @@ std::shared_ptr<Process> Scheduler::createProcessLocked(const std::string& name,
             base = base.substr(0, Process::kMaxNameLength);
         }
 
-        // If 'base' is already taken, advance suffix (-2, -3, ...) until unique
+        // Advance suffix (-2, -3, ...) until unique
         std::string candidate = base;
         for (uint32_t n = 2; nameExistsLocked(candidate); ++n)
         {
@@ -177,11 +215,16 @@ std::shared_ptr<Process> Scheduler::createProcessLocked(const std::string& name,
     std::shared_ptr<Process> p;
     if (instructionCount > 0)
     {
-        p = std::make_shared<Process>(procId, finalName, instructionCount);
+        p = std::make_shared<Process>(procId, finalName, instructionCount, memorySize);
     }
     else
     {
-        p = std::make_shared<Process>(procId, finalName, minIns_, maxIns_);
+        p = std::make_shared<Process>(procId, finalName, minIns_, maxIns_, memorySize);
+    }
+
+    if (memoryManager_)
+    {
+        memoryManager_->allocateProcess(finalName, memorySize);
     }
 
     ready_.push_back(p);
@@ -220,13 +263,11 @@ std::shared_ptr<Process> Scheduler::findProcess(const std::string& name) const
     return nullptr;
 }
 
-// Scheduler Loop & Synchronization
 void Scheduler::schedulerLoop()
 {
     std::unique_lock<std::mutex> lk(mtx_);
     while (running_)
     {
-        // 1. Generate batch dummy processes per tick if enabled
         if (generating_)
         {
             ++batchTicks_;
@@ -237,15 +278,12 @@ void Scheduler::schedulerLoop()
             }
         }
 
-        // 2. Dispatch ready processes to idle cores
         dispatchLocked();
 
-        // 3. Wall-clock tick duration (early wakeup on shutdown)
         cvSleep_.wait_for(lk, tickDuration_, [this] { return !running_; });
         if (!running_)
             break;
 
-        // 4. Release worker threads for 1 tick
         pending_ = numCores_;
         ++generation_;
         cvTick_.notify_all();
@@ -275,7 +313,6 @@ void Scheduler::dispatchLocked()
 
 void Scheduler::collectLocked()
 {
-    // 1. Tick sleeping processes; when awake, return to ready queue
     for (auto it = waiting_.begin(); it != waiting_.end(); )
     {
         (*it)->tickSleep();
@@ -290,7 +327,6 @@ void Scheduler::collectLocked()
         }
     }
 
-    // 2. Collect finished or waiting processes from CPU slots
     for (uint32_t c = 0; c < numCores_; ++c)
     {
         std::shared_ptr<Process>& p = slots_[c];
@@ -299,6 +335,13 @@ void Scheduler::collectLocked()
 
         if (p->isFinished())
         {
+            if (memoryManager_)
+            {
+                // Release process frames and discard backing store pages
+                // Note: Scheduler lock `mtx_` is already held here before taking memory lock
+                memoryManager_->releaseProcess(p->name());
+            }
+
             p->setCore(-1);
             p->setState(ProcessState::Finished);
             finished_.push_back(std::move(p));
@@ -359,7 +402,6 @@ void Scheduler::workerLoop(uint32_t core)
     }
 }
 
-// Snapshot
 Scheduler::ProcessInfo Scheduler::describeLocked(const Process& p) const
 {
     ProcessInfo info;
